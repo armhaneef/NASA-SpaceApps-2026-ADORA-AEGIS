@@ -1,4 +1,4 @@
-"""Synthetic-data baseline detector for AEGIS."""
+"""Synthetic-data anomaly detection and descriptive trends for AEGIS."""
 
 from .pipeline import analyze_health
 

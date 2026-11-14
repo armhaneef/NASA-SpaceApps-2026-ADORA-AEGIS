@@ -1,2 +1,4 @@
-# Runtime uses only the Python standard library. Test dependency:
+# Runtime model dependency; transitive NumPy/SciPy dependencies installed by pip.
+scikit-learn>=1.8,<2
+# Tests:
 pytest>=9.2,<10
