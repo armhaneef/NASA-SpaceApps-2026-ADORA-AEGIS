@@ -8,11 +8,20 @@ digital twin.
 ## What the current prototype can represent
 
 The current AEGIS project separates a digital-twin visualization from the
-data, API, and ML modules. At this stage, the Digital Twin directory contains
-placeholders rather than a working anatomy renderer or a physiological
-simulation. The dashboard's example values are fabricated. The project does
-not currently demonstrate an individualized, continuously updated, clinically
-validated human model.
+data, API, and ML modules. A stylized/procedural 3D renderer and a local
+anatomical GLB integration are implemented in the frontend. The dashboard's
+example values are fabricated. The project does not currently demonstrate a
+physiological simulation or an individualized, continuously updated,
+clinically validated human model.
+
+The repository includes the
+[`adora-anatomy.glb` asset](../frontend/public/models/adora-anatomy.glb), and
+the [Member 5 integration report](../docs/anatomical-model-integration.md)
+documents its inspected mesh identifiers and software-level region mappings.
+Those implementation records do not constitute independent scientific review
+or clinical validation of the asset's anatomy or the mappings. Member 5 owns
+the technical GLB integration, mesh mapping, and viewer behavior; scientific
+and clinical claims require separate review.
 
 For scientific communication, distinguish:
 
@@ -80,8 +89,10 @@ For scientific communication, distinguish:
   immune, radiation-dose, or sleep assessment is connected.
 - No medically validated astronaut baseline, thresholds, reference cohort,
   risk calibration, or escalation protocol is defined.
-- No model-specific validation or clinical review is complete.
-- No GLB/GLTF file or mesh-to-region map is present in this worktree.
+- No physiological-model validation or clinical review is complete.
+- A GLB asset and documented software-level mesh mappings are present; their
+  independent scientific/clinical validation is not established by the
+  integration report.
 - Dataset access and license are record-specific; no NASA dataset has been
   selected or ingested into AEGIS.
 
@@ -102,4 +113,3 @@ Suggested project disclosure:
 - [Anatomical region science](../docs/anatomical-region-science.md)
 - [Cross-team scientific handoff](../docs/cross-team-scientific-handoff.md)
 - [Synthetic health data guidance](../docs/synthetic-health-data-guidance.md)
-
