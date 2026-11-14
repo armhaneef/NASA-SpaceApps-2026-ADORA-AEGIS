@@ -28,11 +28,15 @@ The repository currently has two distinct examples:
   The generator uses a fixed UTC start and configurable seed.
 
 These are not interchangeable schemas. The generated CSV does not include
-CO2, the dashboard's blood pressure, or the sample JSON's `data_source`;
-neither generator output consistently carries a per-record `is_simulated`
-flag or measurement-level unit/provenance fields. The generator's scenario
-labels and bounds are demo controls, not clinical classes or approved
-thresholds.
+CO2 or the sample JSON's `data_source`; neither generator output consistently
+carries a per-record `is_simulated` flag or measurement-level unit/provenance
+fields. Blood pressure is absent from both sample formats, the data-engine
+generator, and the shared backend reading contract. The current dashboard
+shows four generated synthetic metrics (heart rate, SpO2, body temperature,
+and respiration rate), not blood pressure. If a local or older mock UI shows
+a blood-pressure value, it is a presentation-only fixture and not a backend
+measurement. The generator's scenario labels and bounds are demo controls,
+not clinical classes or approved thresholds.
 
 ## Recommended scientific safeguards
 
@@ -113,19 +117,25 @@ any current fixture.
   independent review, and explicit authorization. This prototype has none of
   those approvals.
 
-## Existing AEGIS mismatch to resolve during implementation
+## Dashboard and shared-contract boundary
 
-The current dashboard displays synthetic cards for HR 72, SpO2 98%,
-temperature 36.8 C, BP 118/76 mmHg, and respiration rate 16/min. Its mock
-head-region panel says "Neurological status: Normal," despite having no
-neurological or vision measurement. This is not supported by the fixture.
-Member 5 should replace it with an explicit "not assessed" or equivalent
-demo label when frontend changes are authorized. Do not alter the research
-record by pretending this UI wording is a measured finding.
+The current dashboard's four cards are client-side synthetic demo metrics;
+they are not readings supplied by the backend. The shared sample and
+data-engine formats contain no blood-pressure field, and the backend sensor
+schema does not accept blood pressure as a measurement type. A blood-pressure
+value shown in a local or older mock UI (for example, 118/76 mmHg) must remain
+identified as a fabricated UI fixture, not a backend measurement or an
+astronaut record.
+
+The current frontend identifies the head view as educational and says that no
+neurological assessment is provided. Any older/local mock label such as
+"Neurological status: Normal" is unsupported and must not be presented as a
+finding. The UI owner should keep the explicit "not assessed" limitation
+visible; documentation must not imply that these mock states are measured
+health data.
 
 ## Sources
 
 - Project data contract: [`data-schema.md`](./data-schema.md)
 - NASA repository and rights review: [`nasa-scientific-datasets.md`](./nasa-scientific-datasets.md)
 - Research limitations: [`astronaut-physiology-research.md`](./astronaut-physiology-research.md)
-
