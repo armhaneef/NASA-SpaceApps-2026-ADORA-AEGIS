@@ -11,3 +11,10 @@ or anomaly outputs.
 interface elements without implying clinical validation or certainty.
 
 **Status:** Structure only. No 3D framework, models, or assets are included.
+
+Scientific design boundaries and current limitations are documented in
+[`scientific-methodology.md`](./scientific-methodology.md). Educational
+explanations and allowed interpretations for selectable regions are in
+[`../docs/anatomical-region-science.md`](../docs/anatomical-region-science.md).
+These documents do not claim that the prototype is an individualized or
+clinically validated digital twin.
