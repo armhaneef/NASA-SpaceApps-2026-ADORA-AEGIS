@@ -2,6 +2,8 @@
 
 from fastapi import FastAPI
 
+from app.routes.health import router as health_router
+
 app = FastAPI(
     title="ADORA-AEGIS API",
     description="Starter API for a synthetic astronaut health-monitoring prototype.",
@@ -9,7 +11,4 @@ app = FastAPI(
 )
 
 
-@app.get("/health", tags=["health"])
-def health_check() -> dict[str, str]:
-    """Report that the API process is responding."""
-    return {"status": "ok"}
+app.include_router(health_router)
