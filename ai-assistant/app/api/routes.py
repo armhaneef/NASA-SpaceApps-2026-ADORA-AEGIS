@@ -10,11 +10,13 @@ from fastapi.responses import FileResponse
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.rag.knowledge_store import KnowledgeStore
+from app.schemas.backend_integration import BackendAssistantRequest, BackendAssistantResponse
 from app.schemas.chat import ChatRequest, ChatResponse
 from app.schemas.response import AlertExplanationResponse, HealthResponse, KnowledgeSearchResponse
 from app.services.alert_explainer import AlertExplainer
+from app.services.backend_integration import respond_to_backend
 from app.services.health_assistant import HealthAssistant
-from app.services.llm_service import LLMService
+from app.services.llm_service import LLMCallError, LLMService
 from app.services.voice_service import VoiceService
 from app.safety.input_guard import InputGuard
 from app.safety.medical_policy import MedicalPolicy
@@ -27,12 +29,14 @@ knowledge_store = KnowledgeStore()
 
 @router.get("/health", response_model=HealthResponse)
 def ai_health() -> HealthResponse:
+    llm_available = LLMService().is_available()
     return HealthResponse(
         status="ok",
         service="ai-assistant",
-        mode="offline" if settings.llm_provider == "offline" else "configured",
+        mode="configured" if llm_available else "offline",
         metadata={
             "llm_provider": settings.llm_provider,
+            "llm_available": llm_available,
             "knowledge_documents": len(knowledge_store.documents),
         },
     )
@@ -78,6 +82,18 @@ def chat(payload: dict[str, Any]) -> ChatResponse:
     response = assistant.answer(request)
     validated = OutputGuard.validate_response(response.model_dump())
     return ChatResponse.model_validate(validated)
+
+
+@router.post("/assistant/respond", response_model=BackendAssistantResponse)
+def backend_assistant(payload: BackendAssistantRequest) -> BackendAssistantResponse:
+    try:
+        response = respond_to_backend(payload.model_dump(mode="json"))
+        return BackendAssistantResponse.model_validate(response)
+    except LLMCallError as exc:
+        logger.warning("Backend assistant provider unavailable: %s", exc)
+        raise HTTPException(status_code=503, detail="Configured local assistant provider is unavailable.") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.post("/knowledge/search", response_model=KnowledgeSearchResponse)

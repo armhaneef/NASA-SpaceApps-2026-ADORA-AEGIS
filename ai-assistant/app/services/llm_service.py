@@ -12,21 +12,28 @@ class LLMService:
 
     def __init__(self, provider: str | None = None) -> None:
         self.provider = (provider or settings.llm_provider).strip().lower()
-        self.model = settings.llm_model
-        self.base_url = settings.llm_base_url
-        self.api_key = settings.llm_api_key
+        self.model = (settings.llm_model or "").strip()
+        self.base_url = (settings.llm_base_url or "").strip()
+        self.api_key = (settings.llm_api_key or "").strip()
         self.timeout = settings.llm_timeout_seconds
-        self.offline = self.provider in {"offline", "none"} or not self.model or not self.api_key
+        if self.provider in {"offline", "none"}:
+            self.offline = True
+        elif self.provider == "ollama":
+            self.base_url = self.base_url or "http://localhost:11434"
+            self.offline = not self.model
+        elif self.provider in {"openai", "openai_compatible"}:
+            self.offline = not self.model or not self.api_key
+        else:
+            self.offline = False
 
     def is_available(self) -> bool:
-        return not self.offline
+        return self.provider in {"openai", "openai_compatible", "ollama"} and not self.offline
 
     def generate(self, prompt: str, *, system_prompt: str | None = None, temperature: float = 0.2) -> str:
+        if self.provider not in {"offline", "none", "openai", "openai_compatible", "ollama"}:
+            raise LLMCallError(f"Unsupported provider '{self.provider}'. Supported providers: offline, openai, openai_compatible, ollama.")
         if self.offline:
             return self.offline_response(prompt)
-
-        if self.provider not in {"openai", "openai_compatible", "ollama"}:
-            raise LLMCallError(f"Unsupported provider '{self.provider}'. Supported providers: offline, openai, openai_compatible, ollama.")
 
         if self.provider == "ollama":
             return self._ollama_call(prompt, system_prompt=system_prompt, temperature=temperature)
@@ -70,11 +77,14 @@ class LLMService:
         except httpx.HTTPStatusError as exc:
             raise LLMCallError(f"LLM provider returned an error: {exc.response.status_code}.") from exc
         except httpx.HTTPError as exc:
-            raise LLMCallError(f"LLM provider request failed: {exc}.") from exc
+            raise LLMCallError("LLM provider request failed.") from exc
 
         try:
             data = response.json()
-            return data["choices"][0]["message"]["content"]
+            answer = data["choices"][0]["message"]["content"]
+            if not isinstance(answer, str) or not answer.strip():
+                raise ValueError("empty or non-text completion")
+            return answer.strip()
         except (KeyError, IndexError, TypeError, ValueError) as exc:
             raise LLMCallError("The LLM response format was invalid.") from exc
 
@@ -84,7 +94,7 @@ class LLMService:
         except ImportError as exc:
             raise LLMCallError("The Ollama client dependency is unavailable.") from exc
 
-        base_url = self.base_url or "http://localhost:11434"
+        base_url = (self.base_url or "http://localhost:11434").rstrip("/")
         payload = {
             "model": self.model,
             "prompt": prompt,
@@ -98,10 +108,13 @@ class LLMService:
         except httpx.TimeoutException as exc:
             raise LLMCallError("Ollama request timed out.") from exc
         except httpx.HTTPError as exc:
-            raise LLMCallError(f"Ollama request failed: {exc}.") from exc
+            raise LLMCallError("Ollama request failed.") from exc
 
         try:
             data = response.json()
-            return data["response"]
+            answer = data["response"]
+            if not isinstance(answer, str) or not answer.strip():
+                raise ValueError("empty or non-text response")
+            return answer.strip()
         except (KeyError, TypeError, ValueError) as exc:
             raise LLMCallError("The Ollama response format was invalid.") from exc
