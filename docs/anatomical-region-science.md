@@ -30,11 +30,11 @@ the current model contains separately measurable organs.
 
 | Selectable region | Educational explanation | What the current synthetic dashboard can say |
 |---|---|---|
-| Head / Brain | The brain integrates vestibular, visual, and body-position cues. Microgravity changes the sensory environment; some long-duration astronauts show ocular findings discussed as SANS. Its mechanisms and individual outcomes remain under study. The eye is not the brain, and SANS is not a generic brain-disease label. | Nothing about brain function, vision, balance, intracranial pressure, or SANS. The five demo vitals do not assess these outcomes. |
+| Head / Brain | The brain integrates vestibular, visual, and body-position cues. Microgravity changes the sensory environment; some long-duration astronauts show ocular findings discussed as SANS. Its mechanisms and individual outcomes remain under study. The eye is not the brain, and SANS is not a generic brain-disease label. | Nothing about brain function, vision, balance, intracranial pressure, or SANS. The displayed synthetic demo metrics do not assess these outcomes. |
 | Heart | The heart circulates blood through the body. Gravity, posture, activity, mission phase, and individual adaptation affect how cardiovascular measurements should be interpreted. | A fabricated HR value only. A single synthetic HR is not a cardiac examination, output, diagnosis, or individual baseline. |
 | Lungs | The lungs exchange oxygen and carbon dioxide. Gravity affects pulmonary ventilation/perfusion distribution and related research measurements. | Fabricated SpO2 and respiration-rate fields only. They are not a lung function test, blood gas, respiratory waveform, or evidence of normal pulmonary health. |
 | Abdomen | This is a body region containing multiple organs, not one organ or one physiological system. Nutrition, fluid distribution, body composition, and organ function require different measurements. | No abdominal-organ, metabolic, renal, hepatic, pancreatic, or gastrointestinal assessment. A synthetic temperature is systemic demo data, not an abdomen reading. |
-| Left arm | The arm contains bone, muscle, joints, nerves, and vessels; limb loading and function are studied in spaceflight physiology. | No local strength, bone density, circulation, nerve, or joint measurement. BP is a systemic demo value and must not be assigned to this limb. |
+| Left arm | The arm contains bone, muscle, joints, nerves, and vessels; limb loading and function are studied in spaceflight physiology. | No local strength, bone density, circulation, nerve, or joint measurement. Blood pressure is not in the shared backend/data-engine contract; any local mock value would be systemic UI context, not an arm measurement. |
 | Right arm | Same broad systems as the left arm; side-specific differences require side-specific observations and method context. | No right-arm-specific measurement. Do not duplicate systemic readings as if separately collected. |
 | Left leg | Lower-limb bone and muscle are relevant to mechanical unloading, exercise countermeasures, locomotion, and postflight adaptation. | No local muscle size/strength, bone density, gait, or limb function data. Respiratory rate is not a leg measurement. |
 | Right leg | Same broad systems as the left leg; side-specific claims require side-specific measurements. | No right-leg-specific measurement. Do not imply symmetry or a side-specific result from the whole-body demo feed. |
@@ -72,15 +72,18 @@ synthetic fields and should be corrected by the frontend owner.
 7. Test missing, loading, and failed-asset states without substituting
    invented anatomy.
 
-At this review, the Member 6 worktree has only Digital Twin placeholder
-directories and no GLB/GLTF asset. Consequently, mesh-by-mesh region mapping
-is blocked pending an asset inspection by Member 5. This document supplies
-educational copy only; it does not claim that any of the eight regions is
-implemented in a model.
+The current `origin/dev` includes a stylized renderer and the
+[`adora-anatomy.glb` asset](../frontend/public/models/adora-anatomy.glb).
+The [Member 5 integration report](./anatomical-model-integration.md)
+documents inspected mesh identifiers and software-level region mappings,
+including the abdomen's partial grouping. This research document has not
+independently verified the asset's anatomical accuracy or clinically
+validated the mappings. Member 5 owns GLB loading, mesh mapping, and viewer
+behavior; these implementation details do not establish that the prototype
+measures regional health.
 
 ## Research references
 
 - [Brain and nervous-system evidence](./astronaut-physiology-research.md#phase-1-brain-and-nervous-system)
 - [Respiratory and musculoskeletal evidence](./astronaut-physiology-research.md#phase-2-remaining-astronaut-physiology-systems)
 - [Scientific references index](./scientific-references.md)
-

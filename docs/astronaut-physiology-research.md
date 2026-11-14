@@ -293,29 +293,34 @@ integration and by appropriate clinical/scientific reviewers for accuracy.
 
 ### What the current synthetic dashboard can and cannot indicate
 
-The current demonstration cards show heart rate 72 bpm, oxygen saturation
-(SpO2) 98%, body temperature 36.8 C, blood pressure 118/76 mmHg, and
-respiratory rate 16 breaths/min. These values and their "In range" labels are
-fabricated for interface demonstration. They are not astronaut telemetry,
-NASA measurements, or validated measurements from a real individual.
+The current dashboard displays four synthetic demonstration metrics: heart
+rate, oxygen saturation (SpO2), body temperature, and respiratory rate. They
+are generated for interface demonstration, not supplied by a live sensor
+feed, NASA telemetry, or measurements from a real individual. The current
+dashboard does not display blood pressure.
 
-The current mock head-region panel also labels its reading "Neurological
-status: Normal" and describes neurological indicators as within an expected
-range. None of the synthetic vital cards measures neurological or visual
-function, so that panel text is not supported by the displayed data. This
-research contribution does not change the frontend; flag this wording for
-Member 5 to replace with an explicit "not assessed" or equivalent
-demonstration-only label when frontend work is authorized.
+Blood pressure is also absent from the shared synthetic sample, generated
+CSV/latest JSON, grouped backend reading schema, and backend's accepted sensor
+measurement types. A local or older mock UI may show a value such as 118/76
+mmHg, but that is a presentation-only fixture, not a backend measurement or
+part of the shared data contract. Do not interpret it as an astronaut's
+reading.
 
-They **cannot** establish or rule out SANS, optic-disc edema, refractive
-change, intracranial pressure, a vestibular disorder, spatial disorientation,
-balance impairment, fatigue, sleep loss, cognitive impairment, or a neurological
-disease. The dashboard does not collect visual acuity, refraction, ocular
-imaging (such as OCT or MRI), vestibular function, postural control, sleep
-duration, or a PVT/cognitive task. A heart rate or blood-pressure value is
-nonspecific and cannot substitute for those assessments. The existing values
-must not be relabeled as neurological status or used to make health or mission
-decisions.
+The current frontend describes the head view as educational and states that
+it does not provide a neurological assessment. Any older/local mock UI wording
+such as "Neurological status: Normal" is unsupported by these synthetic
+inputs and must not be treated as a measured result.
+
+These dashboard inputs **cannot** establish or rule out SANS, optic-disc
+edema, refractive change, intracranial pressure, a vestibular disorder,
+spatial disorientation, balance impairment, fatigue, sleep loss, cognitive
+impairment, or a neurological disease. The dashboard does not collect visual
+acuity, refraction, ocular imaging (such as OCT or MRI), vestibular function,
+postural control, sleep duration, or a PVT/cognitive task. A heart-rate value
+is nonspecific and cannot substitute for those assessments. No local mock
+blood-pressure value can substitute for these assessments either. The
+existing values must not be relabeled as neurological status or used to make
+health or mission decisions.
 
 ### Evidence limits and open questions
 
@@ -349,8 +354,10 @@ decisions.
 2. Brunstetter, T. J., et al. (2022). *Spaceflight Associated Neuro-ocular
    Syndrome (SANS): 2022 Clinical Update*. NASA Technical Reports Server,
    20220000516. [NTRS record](https://ntrs.nasa.gov/citations/20220000516).
-   NASA-authored conference abstract. Supports the clinical signs and states
-   that pathogenesis and pathological thresholds were unclear in that update.
+   NASA NTRS classifies the record as a presentation from the 2022 Human
+   Research Program Investigators Workshop. It supports the clinical signs
+   and states that pathogenesis and pathological thresholds were unclear in
+   that update.
    The reported prevalence values are preliminary and should not be generalized.
 3. Macias, B. R., et al. (2020). Association of Long-Duration Spaceflight With
    Anterior and Posterior Ocular Structure Changes in Astronauts and Their

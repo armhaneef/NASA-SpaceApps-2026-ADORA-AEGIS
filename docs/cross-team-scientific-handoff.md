@@ -47,7 +47,7 @@ approve an endpoint, model, UI behavior, medical claim, or implementation.
   or uncertain. Keep provenance visible in the response.
 - Answer using supplied values and documented context only. Do not infer
   neurological normality, healthy organ function, radiation dose, sleep
-  adequacy, or mission fitness from the current five vital fields.
+  adequacy, or mission fitness from the current synthetic demo metrics.
 - Explain a research association as an association; distinguish observed
   findings, plausible mechanisms, and unresolved questions.
 - Do not diagnose, prescribe, assign risk probabilities, invent thresholds,
@@ -98,9 +98,13 @@ approve an endpoint, model, UI behavior, medical claim, or implementation.
   reproducibility metadata, explicit units, and a stable, documented schema.
 - Keep scenario labels as test fixtures rather than health categories.
 - Do not describe distributions as NASA-validated or astronaut-representative.
-- Keep CO2, blood pressure, and other fields consistent across sample JSON,
-  CSV, latest JSON, and downstream API contracts; any schema revision needs
-  cross-team review.
+- Keep shared field names and units aligned across sample JSON, generated
+  CSV/latest JSON, and downstream API contracts; any schema revision needs
+  cross-team review. Currently, CO2 appears in the nested sample and backend
+  contract but not the generated CSV/latest JSON. Blood pressure is absent
+  from the sample formats, generator, and backend measurement schema. If a
+  local mock UI displays blood pressure, treat it as a UI fixture rather than
+  a shared backend/data-engine measurement.
 
 ## Review gates before any scientific product claim
 
@@ -125,4 +129,3 @@ dashboard remains a demonstration prototype.
 - [Digital Twin scientific methodology](../digital-twin/scientific-methodology.md)
 - [Current data schema](./data-schema.md)
 - [Draft Twin API proposal](../backend/TWIN_API_PROPOSAL.md) (proposal only)
-

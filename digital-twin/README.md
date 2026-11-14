@@ -10,7 +10,12 @@ or anomaly outputs.
 **Expected outputs:** A visual representation that maps available data to
 interface elements without implying clinical validation or certainty.
 
-**Status:** Structure only. No 3D framework, models, or assets are included.
+**Status:** The frontend includes a stylized/procedural renderer and loads the
+local `adora-anatomy.glb` asset. The software-level mesh mappings are
+documented in [`../docs/anatomical-model-integration.md`](../docs/anatomical-model-integration.md);
+they are not a clinical assessment or independent scientific validation.
+Member 5 owns the technical GLB integration and viewer mapping. No
+individualized or clinically validated digital twin is implemented.
 
 Scientific design boundaries and current limitations are documented in
 [`scientific-methodology.md`](./scientific-methodology.md). Educational
