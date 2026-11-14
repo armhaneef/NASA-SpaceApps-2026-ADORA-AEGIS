@@ -7,6 +7,9 @@ trends. Forecasts, persistence and HTTP endpoints are not implemented.
 
 ## Run and integrate
 
+Member 4: see [INTEGRATION.md](INTEGRATION.md) for copy-paste backend instructions,
+the standalone FastAPI example and complete machine-readable output schema.
+
 From the repository root with Python 3.11+ (tested on Python 3.14.7):
 
 ```powershell
