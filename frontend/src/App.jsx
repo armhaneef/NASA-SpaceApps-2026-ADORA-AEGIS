@@ -4,12 +4,17 @@ import { OrbitControls, Sparkles } from '@react-three/drei'
 import * as THREE from 'three'
 import AnatomyModel from './AnatomyModel.jsx'
 import {
+  createDemoSnapshot,
+  DEMO_SCENARIOS,
+  DEMO_THRESHOLDS,
+  evaluateSyntheticAlerts,
+  HEALTH_BASELINE,
+} from './healthAlerts.js'
+import {
   Activity,
   AlertTriangle,
   ArrowDownRight,
   ArrowUpRight,
-  AudioLines,
-  BrainCircuit,
   Check,
   ChevronDown,
   CircleHelp,
@@ -26,6 +31,7 @@ import {
   Signal,
   Sparkles as SparklesIcon,
   Wind,
+  X,
 } from 'lucide-react'
 import {
   Area,
@@ -39,118 +45,167 @@ import './App.css'
 
 const REGIONS = {
   head: {
-    name: 'Neural / cranial',
+    name: 'Head',
     shortName: 'HEAD',
-    code: 'CRN-01',
-    description: 'Neural activity and cranial sensor channels',
-    position: [0, 1.55, 0.26],
-    metrics: [
-      ['Neural activity', 'Stable', 'Within personal baseline'],
-      ['Motion artifact', '0.03 g', 'Low signal interference'],
-      ['Sensor contact', '98.4%', 'Nominal contact quality'],
-    ],
+    code: 'ANATOMY-01',
+    description: 'Educational view of the skull and named head structures.',
     explanation:
-      'Cranial channels are tracking within the synthetic personal baseline. No model flag is active for this region.',
+      'This is an educational anatomical view. The prototype does not provide head-specific sensor readings or a neurological assessment.',
+  },
+  brain: {
+    name: 'Brain',
+    shortName: 'BRAIN',
+    code: 'ANATOMY-01B',
+    description: 'The GLB contains separately named brain, brainstem, and cerebellum meshes.',
+    explanation:
+      'The brain meshes are shown for education only. This prototype does not measure brain activity or provide a neurological assessment.',
   },
   heart: {
     name: 'Cardiovascular',
     shortName: 'HEART',
-    code: 'CV-02',
-    description: 'Cardiac rhythm and circulation indicators',
-    position: [0.12, 0.48, 0.48],
-    metrics: [
-      ['Heart rate', '72 bpm', '−2 bpm from baseline'],
-      ['Rhythm signal', 'Regular', 'No synthetic flag'],
-      ['Perfusion index', '4.8%', 'Within baseline range'],
-    ],
+    code: 'ANATOMY-02',
+    description: 'Educational heart view with general simulated vital-sign context.',
     explanation:
-      'Heart-rate trend is near the synthetic crew baseline. This is a prototype reading, not a medical assessment.',
+      'The displayed heart rate is a synthetic demonstration value. It is not a direct measurement of this model or a medical assessment.',
   },
-  lungs: {
-    name: 'Respiratory',
-    shortName: 'LUNGS',
-    code: 'RESP-03',
-    description: 'Respiration and oxygenation sensor channels',
-    position: [0, 0.72, 0.46],
-    metrics: [
-      ['SpO₂', '98%', '+1% from baseline'],
-      ['Respiration', '16 /min', 'Within baseline range'],
-      ['Cabin CO₂', '500 ppm', 'Synthetic environment feed'],
-    ],
+  leftLung: {
+    name: 'Left lung',
+    shortName: 'LEFT LUNG',
+    code: 'ANATOMY-03L',
+    description: 'Left lung mesh; respiratory readings provide general, non-localized context.',
     explanation:
-      'Respiration and oxygenation channels are stable in this generated scenario. Cabin CO₂ is environment telemetry, not a personal clinical measurement.',
+      'SpO₂ and respiration are general synthetic vital signs shown for context; they are not left-lung measurements or a respiratory diagnosis.',
+  },
+  rightLung: {
+    name: 'Right lung',
+    shortName: 'RIGHT LUNG',
+    code: 'ANATOMY-03R',
+    description: 'Right lung mesh; respiratory readings provide general, non-localized context.',
+    explanation:
+      'SpO₂ and respiration are general synthetic vital signs shown for context; they are not right-lung measurements or a respiratory diagnosis.',
   },
   abdomen: {
-    name: 'Core / abdomen',
-    shortName: 'CORE',
-    code: 'CORE-04',
-    description: 'Core temperature and abdominal sensor channels',
-    position: [0, -0.15, 0.43],
-    metrics: [
-      ['Skin temperature', '36.8 °C', 'Within baseline range'],
-      ['Core trend', 'Stable', 'No synthetic flag'],
-      ['Sensor contact', '97.1%', 'Nominal contact quality'],
-    ],
+    name: 'Abdomen',
+    shortName: 'ABDOMEN',
+    code: 'ANATOMY-04',
+    description: 'Educational view of named abdominal organs in the model.',
     explanation:
-      'Core-region channels show no deviation in this synthetic snapshot. Sensor contact remains nominal.',
+      'The abdominal structures are shown for education. The general body-temperature display is not a localized abdominal measurement.',
+  },
+  leftArm: {
+    name: 'Left arm',
+    shortName: 'LEFT ARM',
+    code: 'ANATOMY-05',
+    description: 'Grouped left-side arm structures identified by their mesh names.',
+    explanation: 'The selected arm meshes are anatomical context only. No arm-specific health measurements are available in this prototype.',
+  },
+  rightArm: {
+    name: 'Right arm',
+    shortName: 'RIGHT ARM',
+    code: 'ANATOMY-06',
+    description: 'Grouped right-side arm structures identified by their mesh names.',
+    explanation: 'The selected arm meshes are anatomical context only. No arm-specific health measurements are available in this prototype.',
+  },
+  leftLeg: {
+    name: 'Left leg',
+    shortName: 'LEFT LEG',
+    code: 'ANATOMY-07',
+    description: 'Grouped left-side leg structures identified by their mesh names.',
+    explanation: 'The selected leg meshes are anatomical context only. No leg-specific health measurements are available in this prototype.',
+  },
+  rightLeg: {
+    name: 'Right leg',
+    shortName: 'RIGHT LEG',
+    code: 'ANATOMY-08',
+    description: 'Grouped right-side leg structures identified by their mesh names.',
+    explanation: 'The selected leg meshes are anatomical context only. No leg-specific health measurements are available in this prototype.',
   },
 }
 
-const METRICS = [
+const METRIC_DEFINITIONS = [
   {
     name: 'Heart rate',
-    value: 72,
+    readingKey: 'heart_rate_bpm',
     unit: 'bpm',
-    baseline: '74 bpm',
-    change: '−2',
+    baseline: HEALTH_BASELINE.heart_rate_bpm,
     icon: Heart,
     color: '#ff7892',
     historyKey: 'heart',
   },
   {
     name: 'Oxygen saturation',
-    value: 98,
+    readingKey: 'spo2_percent',
     unit: '%',
-    baseline: '97%',
-    change: '+1',
+    baseline: HEALTH_BASELINE.spo2_percent,
     icon: Activity,
     color: '#71e7ff',
     historyKey: 'oxygen',
   },
   {
     name: 'Body temperature',
-    value: 36.8,
+    readingKey: 'body_temperature_c',
     unit: '°C',
-    baseline: '36.7 °C',
-    change: '+0.1',
+    baseline: HEALTH_BASELINE.body_temperature_c,
     icon: Moon,
     color: '#ffbc77',
     historyKey: 'temperature',
   },
   {
     name: 'Respiration',
-    value: 16,
+    readingKey: 'respiration_rate_bpm',
     unit: '/min',
-    baseline: '16 /min',
-    change: '0',
+    baseline: HEALTH_BASELINE.respiration_rate_bpm,
     icon: Wind,
     color: '#8fa9ff',
     historyKey: 'respiration',
   },
 ]
 
-const HISTORY = Array.from({ length: 28 }, (_, index) => {
-  const wave = (offset, magnitude, frequency) =>
-    offset + Math.sin(index * frequency) * magnitude + Math.cos(index * 0.37) * magnitude * 0.28
+const THRESHOLD_FIELDS = [
+  { key: 'heart_rate_bpm', direction: 'high', label: 'Heart rate · high Δ' },
+  { key: 'heart_rate_bpm', direction: 'low', label: 'Heart rate · low Δ' },
+  { key: 'spo2_percent', direction: 'low', label: 'SpO₂ · low Δ' },
+  { key: 'respiration_rate_bpm', direction: 'high', label: 'Respiration · high Δ' },
+  { key: 'respiration_rate_bpm', direction: 'low', label: 'Respiration · low Δ' },
+]
 
-  return {
-    time: `${String(Math.floor(index / 2)).padStart(2, '0')}:${index % 2 ? '30' : '00'}`,
-    heart: wave(72, 4.3, 0.75),
-    oxygen: wave(97.8, 0.9, 0.53),
-    temperature: wave(36.8, 0.16, 0.3),
-    respiration: wave(16, 1.6, 0.9),
-  }
-})
+function getMetrics(readings, regionStatuses) {
+  return METRIC_DEFINITIONS.map((definition) => {
+    const rawValue = readings[definition.readingKey]
+    const value = definition.unit === '°C' ? rawValue.toFixed(1) : String(Math.round(rawValue))
+    const difference = rawValue - definition.baseline
+    const change = definition.unit === '°C'
+      ? `${difference > 0 ? '+' : ''}${difference.toFixed(1)}`
+      : `${difference > 0 ? '+' : ''}${Math.round(difference)}`
+
+    return {
+      ...definition,
+      value,
+      baselineLabel: `${definition.baseline}${definition.unit === '°C' ? ' °C' : ` ${definition.unit}`}`,
+      change,
+      status: definition.readingKey === 'heart_rate_bpm'
+        ? regionStatuses.heart
+        : definition.readingKey === 'spo2_percent' || definition.readingKey === 'respiration_rate_bpm'
+          ? regionStatuses.leftLung
+          : 'no-data',
+    }
+  })
+}
+
+function getHistory(readings) {
+  return Array.from({ length: 28 }, (_, index) => {
+    const wave = (offset, magnitude, frequency) =>
+      offset + Math.sin(index * frequency) * magnitude + Math.cos(index * 0.37) * magnitude * 0.28
+
+    return {
+      time: `${String(Math.floor(index / 2)).padStart(2, '0')}:${index % 2 ? '30' : '00'}`,
+      heart: wave(readings.heart_rate_bpm, 4.3, 0.75),
+      oxygen: wave(readings.spo2_percent, 0.9, 0.53),
+      temperature: wave(readings.body_temperature_c, 0.16, 0.3),
+      respiration: wave(readings.respiration_rate_bpm, 1.6, 0.9),
+    }
+  })
+}
 
 function ProjectionPlatform() {
   const rings = useRef([])
@@ -161,7 +216,7 @@ function ProjectionPlatform() {
   })
 
   return (
-    <group position={[0, -2.02, 0]}>
+    <group position={[0, -1.72, 0]}>
       {[1.08, 1.31, 1.58, 1.83].map((radius, index) => (
         <mesh key={radius} ref={(node) => (rings.current[index] = node)} rotation-x={-Math.PI / 2}>
           <ringGeometry args={[radius, radius + (index === 0 ? 0.015 : 0.006), 112]} />
@@ -228,27 +283,70 @@ function ScanBeam({ active }) {
   )
 }
 
-function CameraFocus({ controlsRef, selected }) {
-  const target = useRef(new THREE.Vector3(0, 0, 0))
-  const focusPoints = {
-    head: [0, 1.4, 0],
-    heart: [0, 0.55, 0],
-    lungs: [0, 0.72, 0],
-    abdomen: [0, -0.18, 0],
-  }
+function CameraFocus({ controlsRef, selected, focusPoints }) {
+  const focusTarget = useRef(new THREE.Vector3(0, 0, 0))
+  const previousSelection = useRef(selected)
+  const transitionDistance = useRef(5.8)
+  const isTransitioning = useRef(false)
 
   useFrame((_, delta) => {
     const controls = controlsRef.current
     if (!controls) return
-    const next = new THREE.Vector3(...(focusPoints[selected] ?? [0, 0, 0]))
-    target.current.lerp(next, 1 - Math.exp(-delta * 2.8))
-    controls.target.copy(target.current)
+
+    if (previousSelection.current !== selected) {
+      previousSelection.current = selected
+      const point = focusPoints[selected]
+      focusTarget.current.fromArray(point ?? [0, 0, 0])
+      const regionDistance = {
+        brain: 3.2,
+        head: 3.35,
+        heart: 3.35,
+        leftLung: 3.45,
+        rightLung: 3.45,
+        abdomen: 3.55,
+        leftArm: 3.65,
+        rightArm: 3.65,
+        leftLeg: 3.75,
+        rightLeg: 3.75,
+      }
+      transitionDistance.current = selected && point ? regionDistance[selected] ?? 3.5 : 5.8
+      isTransitioning.current = true
+    }
+
+    if (!isTransitioning.current) return
+
+    const smoothing = 1 - Math.exp(-delta * 2.8)
+    const direction = controls.object.position.clone().sub(controls.target).normalize()
+    if (direction.lengthSq() === 0) direction.set(0, 0, 1)
+
+    controls.target.lerp(focusTarget.current, smoothing)
+    const cameraPosition = controls.target
+      .clone()
+      .addScaledVector(direction, transitionDistance.current)
+    controls.object.position.lerp(cameraPosition, smoothing)
     controls.update()
+
+    if (
+      controls.target.distanceToSquared(focusTarget.current) < 0.00001
+      && Math.abs(controls.object.position.distanceTo(controls.target) - transitionDistance.current) < 0.02
+    ) {
+      isTransitioning.current = false
+    }
   })
   return null
 }
 
-function DigitalHuman({ mode, selected, labels, scan, controlsRef, onSelect, onModelStatusChange }) {
+function DigitalHuman({
+  mode,
+  selected,
+  scan,
+  regionStatuses,
+  controlsRef,
+  focusPoints,
+  onSelect,
+  onModelStatusChange,
+  onModelInfo,
+}) {
   return (
     <Canvas
       camera={{ position: [0, 0.02, 5.8], fov: 40, near: 0.1, far: 100 }}
@@ -279,21 +377,22 @@ function DigitalHuman({ mode, selected, labels, scan, controlsRef, onSelect, onM
       <AnatomyModel
         mode={mode}
         selected={selected}
-        labels={labels}
+        regionStatuses={regionStatuses}
         onSelect={onSelect}
         onStatusChange={onModelStatusChange}
+        onModelInfo={onModelInfo}
       />
       <ProjectionPlatform />
       <ScanBeam active={scan} />
-      <CameraFocus controlsRef={controlsRef} selected={selected} />
+      <CameraFocus controlsRef={controlsRef} selected={selected} focusPoints={focusPoints} />
       <OrbitControls
         ref={controlsRef}
         makeDefault
-        enablePan={false}
+        enablePan
         enableDamping
         dampingFactor={0.08}
-        minDistance={4.2}
-        maxDistance={11}
+        minDistance={1.7}
+        maxDistance={9}
         minPolarAngle={Math.PI * 0.29}
         maxPolarAngle={Math.PI * 0.68}
         rotateSpeed={0.65}
@@ -308,21 +407,21 @@ function MetricCard({ metric, index, active, onSelect }) {
 
   return (
     <button
-      className={`metric-readout ${active ? 'metric-active' : ''}`}
+      className={`metric-readout ${active ? 'metric-active' : ''} metric-status-${metric.status}`}
       onClick={onSelect}
       style={{ '--metric-color': metric.color, '--stagger': `${index * 70}ms` }}
     >
       <div className="metric-topline">
         <span className="metric-icon"><Icon size={14} strokeWidth={1.7} /></span>
         <span className="metric-name">{metric.name}</span>
-        <span className="metric-live"><i />LIVE</span>
+        <span className="metric-live"><i />SIM</span>
       </div>
       <div className="metric-number">
         <strong>{metric.value}</strong>
         <span>{metric.unit}</span>
       </div>
       <div className="metric-baseline">
-        <span>BASE {metric.baseline}</span>
+        <span>BASE {metric.baselineLabel}</span>
         <span className={positive ? 'trend-up' : 'trend-down'}>
           {positive ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
           {metric.change}
@@ -332,19 +431,19 @@ function MetricCard({ metric, index, active, onSelect }) {
   )
 }
 
-function EcgChart({ metric }) {
+function EcgChart({ metric, history }) {
   return (
     <div className="chart-frame">
       <div className="chart-heading">
         <div>
-          <span className="eyebrow">LIVE TELEMETRY</span>
+          <span className="eyebrow">SIMULATED FEED</span>
           <strong><Activity size={13} /> {metric.name.toUpperCase()}</strong>
         </div>
-        <span className="chart-window">LAST 14H</span>
+        <span className="chart-window">DEMO WINDOW</span>
       </div>
       <div className="chart-canvas">
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={HISTORY} margin={{ top: 8, right: 2, left: -26, bottom: 0 }}>
+          <AreaChart data={history} margin={{ top: 8, right: 2, left: -26, bottom: 0 }}>
             <defs>
               <linearGradient id="telemetry-fill" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor={metric.color} stopOpacity={0.26} />
@@ -392,7 +491,7 @@ function EcgChart({ metric }) {
   )
 }
 
-function Header({ astronaut, setAstronaut, missionTime }) {
+function Header({ astronaut, setAstronaut, missionTime, hasAlerts }) {
   return (
     <header className="topbar">
       <div className="brand-lockup">
@@ -419,20 +518,33 @@ function Header({ astronaut, setAstronaut, missionTime }) {
           <span>MISSION ELAPSED <i>SIMULATED</i></span>
           <strong>{missionTime}</strong>
         </div>
-        <div className="system-state"><i /><span>ALL SYSTEMS<br /><b>NOMINAL</b></span></div>
+        <div className={`system-state ${hasAlerts ? 'system-state-alert' : ''}`}>
+          <i /><span>DEMO STATUS<br /><b>{hasAlerts ? 'ALERT ACTIVE' : 'NOMINAL'}</b></span>
+        </div>
         <div className="synthetic-tag"><span /> SIMULATION <b>/</b> SYNTHETIC DATA</div>
       </div>
     </header>
   )
 }
 
-function LeftHud({ astronaut, onSelect, activeMetric, setActiveMetric }) {
-  const active = METRICS[activeMetric]
+function LeftHud({
+  astronaut,
+  onSelect,
+  activeMetric,
+  setActiveMetric,
+  metrics,
+  history,
+  scenarioId,
+  onScenarioChange,
+  thresholds,
+  onThresholdChange,
+}) {
+  const active = metrics[activeMetric]
   return (
     <aside className="left-hud">
       <div className="panel-title">
         <div><span className="panel-index">01</span><span>CREW VITALS</span></div>
-        <span className="feed-state"><i /> FEED ACTIVE</span>
+        <span className="feed-state"><i /> SIMULATED FEED</span>
       </div>
       <div className="crew-profile">
         <div className="crew-avatar">A<span>{astronaut.slice(-2)}</span></div>
@@ -442,8 +554,51 @@ function LeftHud({ astronaut, onSelect, activeMetric, setActiveMetric }) {
         </div>
         <div className="crew-signal"><Signal size={15} /></div>
       </div>
+      <label className="scenario-picker">
+        <span>SIMULATION / DEMO MODE</span>
+        <select
+          value={scenarioId}
+          onChange={(event) => onScenarioChange(event.target.value)}
+          aria-label="Select synthetic health alert scenario"
+        >
+          {DEMO_SCENARIOS.map((scenario) => (
+            <option key={scenario.id} value={scenario.id}>{scenario.label}</option>
+          ))}
+        </select>
+      </label>
+      <details className="threshold-editor">
+        <summary>CONFIGURE DEMO THRESHOLDS <span>Δ FROM BASELINE</span></summary>
+        <div className="threshold-fields">
+          {THRESHOLD_FIELDS.map(({ key, direction, label }) => (
+            <div className="threshold-field" key={`${key}-${direction}`}>
+              <span>{label}</span>
+              <label>
+                <span>WARN</span>
+                <input
+                  type="number"
+                  min="1"
+                  value={thresholds[key][direction].warning}
+                  onChange={(event) => onThresholdChange(key, direction, 'warning', event.target.value)}
+                  aria-label={`${label} warning deviation`}
+                />
+              </label>
+              <label>
+                <span>CRIT</span>
+                <input
+                  type="number"
+                  min="1"
+                  value={thresholds[key][direction].critical}
+                  onChange={(event) => onThresholdChange(key, direction, 'critical', event.target.value)}
+                  aria-label={`${label} critical deviation`}
+                />
+              </label>
+            </div>
+          ))}
+        </div>
+        <p>Illustrative deviation values; not clinical limits.</p>
+      </details>
       <div className="metrics-stack">
-        {METRICS.map((metric, index) => (
+        {metrics.map((metric, index) => (
           <MetricCard
             key={metric.name}
             metric={metric}
@@ -452,13 +607,13 @@ function LeftHud({ astronaut, onSelect, activeMetric, setActiveMetric }) {
             onSelect={() => {
               setActiveMetric(index)
               if (metric.name === 'Heart rate') onSelect('heart')
-              if (metric.name === 'Oxygen saturation' || metric.name === 'Respiration') onSelect('lungs')
+              if (metric.name === 'Oxygen saturation' || metric.name === 'Respiration') onSelect('leftLung')
               if (metric.name === 'Body temperature') onSelect('abdomen')
             }}
           />
         ))}
       </div>
-      <EcgChart metric={active} />
+      <EcgChart metric={active} history={history} />
       <div className="baseline-note">
         <span className="baseline-symbol"><Crosshair size={13} /></span>
         <span>Values compared to <b>individual baseline</b><br />Synthetic crew profile · 14h window</span>
@@ -468,13 +623,61 @@ function LeftHud({ astronaut, onSelect, activeMetric, setActiveMetric }) {
   )
 }
 
-function RightHud({ selected }) {
+function RightHud({
+  selected,
+  readings,
+  alerts,
+  regionStatuses,
+  onSelectRegion,
+  updatedAt,
+  mobileOpen,
+  onClose,
+}) {
   const region = selected ? REGIONS[selected] : null
+  const alertSeverity = alerts.some((alert) => alert.severity === 'critical')
+    ? 'critical'
+    : alerts.length
+      ? 'warning'
+      : 'normal'
+  const status = selected ? regionStatuses[selected] : alertSeverity
+  const regionalAlerts = alerts.filter((alert) => alert.region === selected)
+  const visibleAlerts = alerts
+  const indicators = selected === 'heart'
+    ? [
+      ['Heart rate', `${readings.heart_rate_bpm} bpm`, `Demo baseline ${HEALTH_BASELINE.heart_rate_bpm} bpm`],
+      ['Baseline difference', `${readings.heart_rate_bpm - HEALTH_BASELINE.heart_rate_bpm >= 0 ? '+' : ''}${readings.heart_rate_bpm - HEALTH_BASELINE.heart_rate_bpm} bpm`, 'Synthetic comparison only'],
+      ['Trend window', '28 demo points', 'Illustrative series; no prediction'],
+    ]
+    : ['leftLung', 'rightLung'].includes(selected)
+      ? [
+        ['SpO₂', `${readings.spo2_percent}%`, 'General synthetic reading · not lung-localized'],
+        ['Respiration', `${readings.respiration_rate_bpm} /min`, 'General synthetic reading · not lung-localized'],
+        ['Personal baseline', `${HEALTH_BASELINE.spo2_percent}% · ${HEALTH_BASELINE.respiration_rate_bpm} /min`, 'Demo reference values'],
+        ['Trend window', '28 demo points', 'Illustrative series; no prediction'],
+      ]
+      : selected
+        ? [
+          ['Region status', status === 'no-data' ? 'NO DATA' : status.toUpperCase(), 'No local sensor is represented'],
+          ['Direct measurements', 'None', 'Anatomy display only'],
+        ]
+        : [
+          ['Active demo alerts', String(alerts.length), 'Threshold and explicit demo markers'],
+          ['Data source', 'Synthetic', 'No live astronaut connection'],
+        ]
+  const alertCountLabel = String(alerts.length).padStart(2, '0')
+
   return (
-    <aside className="right-hud">
+    <aside
+      id="region-details-panel"
+      className={`right-hud ${mobileOpen ? 'mobile-open' : ''}`}
+      aria-label="Region health details"
+    >
       <div className="panel-title">
         <div><span className="panel-index">02</span><span>REGION ANALYSIS</span></div>
-        <Maximize2 size={13} className="muted-icon" />
+        <button type="button" className="mobile-drawer-close" onClick={onClose} aria-label="Close region details">
+          <X size={16} />
+        </button>
+        <Maximize2 size={13} className="muted-icon desktop-maximize" />
       </div>
       <div className="region-overview">
         <div className={`region-orb ${selected ? `orb-${selected}` : ''}`}>
@@ -484,53 +687,104 @@ function RightHud({ selected }) {
         <div>
           <span className="eyebrow">{region?.code ?? 'FULL BODY SCAN'}</span>
           <h2>{region?.name ?? 'System overview'}</h2>
-          <p>{region?.description ?? 'Select a highlighted body region to inspect its sensor channels.'}</p>
+          <p>{region?.description ?? 'Select a highlighted region or choose a simulation scenario.'}</p>
         </div>
       </div>
       <div className="section-rule"><span>REGIONAL INDICATORS</span><i /></div>
       <div className="regional-metrics">
-        {(region?.metrics ?? [
-          ['Sensor channels', '12 / 12', 'All synthetic feeds online'],
-          ['Data integrity', '99.2%', 'Signal quality nominal'],
-          ['Baseline variance', 'Low', 'No active deviation'],
-        ]).map(([label, value, note]) => (
+        {indicators.map(([label, value, note]) => (
           <div className="regional-metric" key={label}>
-            <div className="regional-label">{label}<span className="metric-check"><Check size={10} /></span></div>
+            <div className="regional-label">{label}<span className={`region-status-chip status-${status}`}>{status.toUpperCase()}</span></div>
             <strong>{value}</strong>
             <span className="regional-note">{note}</span>
           </div>
         ))}
       </div>
-      <div className="ml-status">
-        <div className="ml-icon"><BrainCircuit size={17} /></div>
-        <div className="ml-copy">
-          <span className="eyebrow">ML ANOMALY SCREEN</span>
-          <strong><i /> NO ANOMALY FLAGGED</strong>
+      <section className={`region-detail-panel status-${status}`} aria-label="Selected region health details">
+        <div className="region-detail-heading">
+          <span>{selected ? 'REGION HEALTH STATUS' : 'OVERALL DEMO STATUS'}</span>
+          <b>{status === 'no-data' ? 'NO DATA' : status.toUpperCase()}</b>
         </div>
-        <span className="ml-score">0.04</span>
+        <div className="region-detail-section">
+          <span>SIMULATED FINDINGS</span>
+          {regionalAlerts.length ? (
+            <ul>
+              {regionalAlerts.map((alert) => <li key={alert.id}>{alert.reason}</li>)}
+            </ul>
+          ) : (
+            <p>{selected
+              ? 'No region-specific synthetic finding is available for this anatomical area.'
+              : 'No region is selected. Scenario alerts remain visible below.'}</p>
+          )}
+        </div>
+        <div className="region-detail-section">
+          <span>TREND / SUGGESTED NEXT STEP</span>
+          <p>
+            {regionalAlerts.some((alert) => alert.source === 'demo-region-simulation')
+              ? 'Review this explicit regional demo marker and the synthetic dashboard trends; no medical action is implied.'
+              : 'Review the synthetic trend display for demonstration only. No predictive or clinical recommendation is available.'}
+          </p>
+        </div>
+        <div className="region-detail-updated">
+          SIMULATION UI UPDATED · {updatedAt.toLocaleTimeString([], {
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+          })}
+        </div>
+      </section>
+      <div className={`ml-status demo-rule-status status-${alertSeverity}`}>
+        <div className="ml-icon"><Activity size={17} /></div>
+        <div className="ml-copy">
+          <span className="eyebrow">DEMO THRESHOLD SCREEN</span>
+          <strong><i /> {alerts.length ? `${alerts.length} SIMULATED ALERT${alerts.length === 1 ? '' : 'S'}` : 'NO DEMO ALERTS'}</strong>
+        </div>
+        <span className="ml-score">RULES</span>
       </div>
       <div className="assistant-panel">
         <div className="assistant-heading">
           <span className="assistant-spark"><SparklesIcon size={13} /></span>
-          <div><span className="eyebrow">AEGIS ASSISTANT</span><b>Signal interpretation</b></div>
+          <div>          <span className="eyebrow">AEGIS DEMO EXPLANATION</span><b>Threshold context</b></div>
           <span className="assistant-beta">BETA</span>
         </div>
-        <p>{region?.explanation ?? 'All monitored channels remain within the synthetic personal baseline in this example snapshot. Select a region for a focused, non-clinical summary.'}</p>
-        <span className="assistant-disclaimer"><Shield size={11} /> PROTOTYPE INTERPRETATION · NOT MEDICAL ADVICE</span>
+        <p>
+          {regionalAlerts[0]?.explanation
+            ?? region?.explanation
+            ?? 'Rule-based visual demo only. No ML model, backend alert service, live astronaut data, or clinical assessment is connected.'}
+        </p>
+        <span className="assistant-disclaimer"><Shield size={11} /> SIMULATION ONLY · NOT A DIAGNOSIS</span>
       </div>
       <div className="alerts-heading">
-        <span>RECENT EVENTS</span><span>02</span>
+        <span>SIMULATED ALERTS</span><span>{alertCountLabel}</span>
       </div>
-      <div className="alert-item">
-        <span className="alert-mark"><Check size={11} /></span>
-        <div><b>Sensor sync complete</b><span>All channels · 00:14 ago</span></div>
-        <span className="alert-type">INFO</span>
+      <div className="alert-legend" aria-label="Alert color legend">
+        <span><i className="legend-normal" />NORMAL</span>
+        <span><i className="legend-warning" />WARNING</span>
+        <span><i className="legend-critical" />CRITICAL</span>
+        <span><i className="legend-no-data" />NO DATA</span>
       </div>
-      <div className="alert-item">
-        <span className="alert-mark alert-mark-blue"><AudioLines size={11} /></span>
-        <div><b>Baseline refreshed</b><span>Crew profile · 02:31 ago</span></div>
-        <span className="alert-type">SYNC</span>
-      </div>
+      {visibleAlerts.length ? visibleAlerts.map((alert) => (
+        <button
+          className={`alert-item alert-item-${alert.severity}`}
+          key={alert.id}
+          onClick={() => onSelectRegion(alert.region)}
+          type="button"
+        >
+          <span className="alert-mark"><AlertTriangle size={11} /></span>
+          <span className="alert-copy">
+            <b>{REGIONS[alert.region]?.name ?? alert.region} · {alert.measurement}</b>
+            <span>
+              {alert.value === undefined
+                ? alert.reason
+                : `${alert.value} ${alert.unit} · baseline ${alert.baseline} ${alert.unit} · Δ ${alert.deviation > 0 ? '+' : ''}${alert.deviation}`}
+            </span>
+          </span>
+          <span className="alert-type">{alert.severity.toUpperCase()}</span>
+        </button>
+      )) : (
+        <p className="no-alerts">No active alerts in this synthetic scenario.</p>
+      )}
+      <p className="alert-disclaimer">Demo thresholds and explicit region markers are illustrative only; they are not clinical limits.</p>
     </aside>
   )
 }
@@ -544,6 +798,9 @@ function ViewControls({
   setScan,
   resetCamera,
   zoomCamera,
+  selected,
+  focusPoints,
+  onSelectRegion,
 }) {
   return (
     <div className="view-controls">
@@ -578,6 +835,21 @@ function ViewControls({
           <span className="toggle-switch"><i /></span><span>SCAN</span>
         </button>
       </div>
+      <label className="region-picker">
+        <span>ANATOMICAL REGION</span>
+        <select
+          value={selected ?? ''}
+          onChange={(event) => onSelectRegion(event.target.value || null)}
+          aria-label="Select anatomical region"
+        >
+          <option value="">FULL BODY</option>
+          {Object.entries(REGIONS).map(([key, region]) => (
+            <option key={key} value={key} disabled={!focusPoints[key]}>
+              {region.shortName}
+            </option>
+          ))}
+        </select>
+      </label>
       <div className="drag-hint"><Move3D size={13} /><span>DRAG TO ROTATE</span></div>
     </div>
   )
@@ -585,14 +857,33 @@ function ViewControls({
 
 function App() {
   const [selectedRegion, setSelectedRegion] = useState(null)
+  const [modelInfo, setModelInfo] = useState({})
+  const [scenarioId, setScenarioId] = useState('normal')
+  const [thresholds, setThresholds] = useState(DEMO_THRESHOLDS)
   const [mode, setMode] = useState('outer')
   const [labels, setLabels] = useState(true)
   const [scan, setScan] = useState(true)
   const [modelStatus, setModelStatus] = useState('loading')
+  const [updatedAt, setUpdatedAt] = useState(() => new Date())
+  const [mobileDetailsOpen, setMobileDetailsOpen] = useState(false)
   const [activeMetric, setActiveMetric] = useState(0)
   const [astronaut, setAstronaut] = useState('A-01')
   const [missionSeconds, setMissionSeconds] = useState(2 * 3600 + 14 * 60 + 8)
   const controlsRef = useRef()
+  const snapshot = useMemo(() => createDemoSnapshot(scenarioId), [scenarioId])
+  const { alerts, regionStatuses } = useMemo(
+    () => evaluateSyntheticAlerts(snapshot.readings, {
+      thresholds,
+      regionAlerts: snapshot.regionAlerts,
+    }),
+    [snapshot, thresholds],
+  )
+  const metrics = useMemo(
+    () => getMetrics(snapshot.readings, regionStatuses),
+    [snapshot, regionStatuses],
+  )
+  const history = useMemo(() => getHistory(snapshot.readings), [snapshot])
+  const focusPoints = modelInfo.focusPoints ?? {}
 
   useEffect(() => {
     const timer = window.setInterval(() => setMissionSeconds((time) => time + 1), 1000)
@@ -611,10 +902,48 @@ function App() {
     controlsRef.current?.reset()
   }
 
+  const selectRegion = (region) => {
+    setSelectedRegion(region && focusPoints[region] ? region : null)
+  }
+
+  const updateThreshold = (key, direction, level, inputValue) => {
+    const value = Number(inputValue)
+    if (!Number.isFinite(value) || value < 1) return
+
+    const previous = thresholds[key][direction]
+    const next = {
+      ...previous,
+      [level]: value,
+    }
+    if (level === 'warning') next.critical = Math.max(next.critical, value)
+    if (level === 'critical') next.warning = Math.min(next.warning, value)
+
+    setThresholds({
+      ...thresholds,
+      [key]: {
+        ...thresholds[key],
+        [direction]: next,
+      },
+    })
+    setUpdatedAt(new Date())
+  }
+
+  const changeScenario = (nextScenarioId) => {
+    setScenarioId(nextScenarioId)
+    setSelectedRegion(null)
+    setUpdatedAt(new Date())
+  }
+
   const zoomCamera = (scale) => {
     const controls = controlsRef.current
     if (!controls) return
-    const offset = controls.object.position.clone().sub(controls.target).multiplyScalar(scale)
+    const offset = controls.object.position.clone().sub(controls.target)
+    const nextDistance = THREE.MathUtils.clamp(
+      offset.length() * scale,
+      controls.minDistance,
+      controls.maxDistance,
+    )
+    offset.setLength(nextDistance)
     controls.object.position.copy(controls.target).add(offset)
     controls.update()
   }
@@ -623,17 +952,40 @@ function App() {
     <main className="command-center">
       <div className="ambient-glow ambient-left" />
       <div className="ambient-glow ambient-right" />
-      <Header astronaut={astronaut} setAstronaut={setAstronaut} missionTime={missionTime} />
+      <Header
+        astronaut={astronaut}
+        setAstronaut={setAstronaut}
+        missionTime={missionTime}
+        hasAlerts={alerts.length > 0}
+      />
       <div className="command-content">
         <LeftHud
           astronaut={astronaut}
-          onSelect={setSelectedRegion}
+          onSelect={selectRegion}
           activeMetric={activeMetric}
           setActiveMetric={setActiveMetric}
+          metrics={metrics}
+          history={history}
+          scenarioId={scenarioId}
+          onScenarioChange={changeScenario}
+          thresholds={thresholds}
+          onThresholdChange={updateThreshold}
         />
         <section className="hologram-stage" aria-label="Interactive 3D astronaut digital twin">
+          <button
+            type="button"
+            className="mobile-details-toggle"
+            onClick={() => setMobileDetailsOpen((open) => !open)}
+            aria-expanded={mobileDetailsOpen}
+            aria-controls="region-details-panel"
+          >
+            {mobileDetailsOpen ? 'CLOSE DETAILS' : 'REGION DETAILS'}
+          </button>
           <div className="stage-header">
-            <span><i /> DIGITAL TWIN <b>/</b> {modelStatus === 'ready' ? 'ANATOMY MODEL' : 'MODEL ASSET PENDING'}</span>
+            <span><i /> DIGITAL TWIN <b>/</b> {modelStatus === 'ready' ? 'ANATOMY MODEL' : 'SCHEMATIC FALLBACK'}</span>
+            {labels && selectedRegion && (
+              <span className="stage-focus-label">FOCUS / {REGIONS[selectedRegion].shortName}</span>
+            )}
             <span className="stage-coordinates">X 00.00 <b>Y</b> 01.84 <b>Z</b> 00.00</span>
           </div>
           <div className="stage-corner corner-tl" />
@@ -655,17 +1007,27 @@ function App() {
             <DigitalHuman
               mode={mode}
               selected={selectedRegion}
-              labels={labels}
               scan={scan}
+              regionStatuses={regionStatuses}
               controlsRef={controlsRef}
-              onSelect={setSelectedRegion}
+              focusPoints={focusPoints}
+              onSelect={selectRegion}
               onModelStatusChange={setModelStatus}
+              onModelInfo={setModelInfo}
             />
           </div>
           <div className="stage-footer">
-            <span><i /> {modelStatus === 'ready' ? 'ANATOMY GLB' : 'HOLOGRAM FALLBACK'}</span>
+            <span><i /> {modelStatus === 'ready' ? 'ANATOMY GLB' : 'SCHEMATIC ONLY'}</span>
             <span>{selectedRegion ? REGIONS[selectedRegion].code : 'FULL BODY VIEW'}</span>
             <span>WEBGL <b>●</b></span>
+            <a
+              className="model-attribution"
+              href="https://github.com/MervinR07/open-anatomy-3d"
+              target="_blank"
+              rel="noreferrer"
+            >
+              BODYPARTS3D · OPEN-ANATOMY · CC BY 4.0
+            </a>
           </div>
           <ViewControls
             mode={mode}
@@ -676,19 +1038,31 @@ function App() {
             setScan={setScan}
             resetCamera={resetCamera}
             zoomCamera={zoomCamera}
+            selected={selectedRegion}
+            focusPoints={focusPoints}
+            onSelectRegion={selectRegion}
           />
           <div className={`model-note model-status-${modelStatus}`}>
             {modelStatus === 'ready' ? <Check size={11} /> : <AlertTriangle size={11} />}
             {modelStatus === 'ready'
-              ? 'ANATOMY GLB LOADED · SELECT HOTSPOTS OR NAMED MESHES'
+              ? 'ANATOMY GLB LOADED · SELECT A NAMED REGION'
               : modelStatus === 'loading'
-                ? 'CHECKING ANATOMY MODEL · NON-ANATOMICAL CONTOUR SHOWN'
+                ? 'LOADING MODEL · NON-ANATOMICAL SCHEMATIC SHOWN'
                 : modelStatus === 'error'
-                  ? 'MODEL LOAD FAILED · CHECK GLB FILE AND MESH NAMES'
-                  : 'MODEL NOT INSTALLED · ADD /MODELS/ASTRONAUT-ANATOMY.GLB'}
+                  ? 'MODEL LOAD FAILED · NON-ANATOMICAL SCHEMATIC SHOWN'
+                  : 'MODEL FILE MISSING · NON-ANATOMICAL SCHEMATIC SHOWN'}
           </div>
         </section>
-        <RightHud selected={selectedRegion} />
+        <RightHud
+          selected={selectedRegion}
+          readings={snapshot.readings}
+          alerts={alerts}
+          regionStatuses={regionStatuses}
+          onSelectRegion={selectRegion}
+          updatedAt={updatedAt}
+          mobileOpen={mobileDetailsOpen}
+          onClose={() => setMobileDetailsOpen(false)}
+        />
       </div>
       <footer className="bottom-status">
         <div className="footer-left"><span className="footer-shield"><Shield size={13} /></span><span><b>AEGIS PROTOTYPE</b> <i>·</i> FLIGHT HEALTH SYSTEMS</span></div>
