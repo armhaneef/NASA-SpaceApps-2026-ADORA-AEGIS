@@ -1,0 +1,9 @@
+{
+  "astronaut_id": "AST-001",
+  "timestamp": "2026-01-01T00:59:00Z",
+  "heart_rate_bpm": 76,
+  "spo2_percent": 97.5,
+  "body_temperature_c": 36.66,
+  "respiration_rate_bpm": 15.3,
+  "scenario": "normal"
+}
