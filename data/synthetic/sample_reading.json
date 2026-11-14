@@ -1,0 +1,25 @@
+{
+  "astronaut_id": "SYNTHETIC-ASTRONAUT-001",
+  "timestamp": "2026-01-01T00:00:00Z",
+  "heart_rate": {
+    "value": 72,
+    "unit": "beats/min"
+  },
+  "spo2": {
+    "value": 98,
+    "unit": "%"
+  },
+  "temperature": {
+    "value": 36.8,
+    "unit": "degC"
+  },
+  "respiration_rate": {
+    "value": 16,
+    "unit": "breaths/min"
+  },
+  "co2": {
+    "value": 500,
+    "unit": "ppm"
+  },
+  "data_source": "synthetic_example"
+}
