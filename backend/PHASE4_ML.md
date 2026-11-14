@@ -49,7 +49,11 @@ fallback: the caller must explicitly request mock mode.
 
 ## Input preparation policy
 
-Only `heart_rate`, `spo2`, and `temperature` are supported by this ML handoff.
+`heart_rate`, `spo2`, and `skin_temperature` feed this ML handoff. The legacy
+`temperature` field is eligible only when the request explicitly includes
+`temperature_is_skin: true`. Explicit `skin_temperature` wins at the same instant
+if both temperature fields exist, regardless of insertion order. Without that
+confirmation, legacy temperature rows do not select the current/history instants.
 Readings are selected for the exact astronaut and requested source; source must
 start with `synthetic`, and all selected readings must have `is_simulated=true`.
 Other provenance is rejected, never relabelled. A source declaration alone is
@@ -62,10 +66,12 @@ and later data never enter history. Per instant and type, the greatest database
 ID wins for duplicate readings. These are input-selection rules, not baseline
 or anomaly logic. The window is a draft demo policy, not curated clinical data.
 
-Units, missing sensors, and source values are passed unchanged. In particular,
-`bpm` is not silently converted to `beats/min`, and `skin_temperature` is not
-renamed `temperature`; those mappings require team agreement. Member 2's engine
-reports missing/wrong-unit/out-of-domain sensors via its quality fields. A
+Stored rows are preserved unchanged. During input preparation, `bpm` is normalized
+to equivalent `beats/min`, and `skin_temperature` maps to ML's `temperature`.
+Both mappings apply to current data and history and are recorded in
+`preparation_notes`. Other units, missing sensors, and source values are passed
+unchanged. Member 2's engine reports missing/wrong-unit/out-of-domain sensors
+via its quality fields. Values are not clipped or imputed. A
 real result with insufficient history remains `insufficient_data`, with null
 flag/score, never normal. The backend does not reproduce the ML thresholds.
 
@@ -88,6 +94,8 @@ The response includes:
   units, source, sensor type, quality, timestamps, and simulation flags.
 - `ml_result`: entire validated Member 2 response including nulls and additive
   fields, quality warnings, baselines, trends, model selection, and scoring details.
+- `preparation_notes`: explicit unit/field mappings and temperature precedence
+  decisions, with original row IDs. Older saved results default to an empty list.
 
 `affected_measurements` lists the engine's **baseline sensor anomaly flags**;
 it is not an attribution of an Isolation Forest joint result and can disagree
@@ -158,6 +166,7 @@ adapter's insufficient-data path and the ML module's normal/anomaly fixtures for
 both baseline and Isolation Forest methods. These are software integration
 checks, not an evaluation of medical accuracy or model performance.
 
+The Phase 6 follow-up is documented in [PHASE6_ML_INTEGRATION.md](PHASE6_ML_INTEGRATION.md).
 Member 2 should confirm the source/unit mappings, synchronized-input selection,
 history window, schema version, and meaning of summary fields. Members 5 and 6
 should review the response envelope before integration. These routes do not yet

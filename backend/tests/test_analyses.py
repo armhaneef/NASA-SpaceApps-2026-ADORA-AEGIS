@@ -166,6 +166,7 @@ def test_no_data_and_missing_astronaut(client):
 
 @pytest.mark.parametrize("changes", [{"mode": "cloud"}, {"source": ""}, {"history_limit": -1},
                                      {"history_limit": 201}, {"timestamp": "2026-11-14T10:00:00"},
+                                     {"temperature_is_skin": "true"},
                                      {"unknown": True}])
 def test_invalid_requests(seeded, changes):
     assert seeded.post(URL, json=REQUEST | changes).status_code == 422

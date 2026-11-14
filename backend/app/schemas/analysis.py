@@ -2,7 +2,7 @@
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, JsonValue
+from pydantic import BaseModel, ConfigDict, Field, JsonValue, StrictBool
 
 from app.schemas.astronaut import Identifier
 from app.schemas.sensor import Source, Timestamp
@@ -15,6 +15,7 @@ class AnalysisRequest(BaseModel):
     source: Source
     timestamp: Timestamp | None = None
     history_limit: int = Field(default=100, ge=0, le=200)
+    temperature_is_skin: StrictBool = False
 
 
 class AnalysisResult(BaseModel):
@@ -34,6 +35,7 @@ class AnalysisResult(BaseModel):
     prepared_input: dict[str, JsonValue]
     input_readings: list[dict[str, JsonValue]]
     ml_result: dict[str, JsonValue] | None
+    preparation_notes: list[str] = Field(default_factory=list)
 
 
 class AnalysisRead(AnalysisResult):
