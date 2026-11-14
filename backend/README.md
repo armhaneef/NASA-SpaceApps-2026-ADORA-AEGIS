@@ -244,3 +244,12 @@ remaining integration limitations. Files added are `app/schemas/assistant.py`,
 `app/routes/assistant.py`, and `tests/test_assistant.py`. `app/main.py` registers
 the route and error handlers; `app/services/errors.py` defines provider failures.
 The AI module and shared files are untouched.
+
+## Phase 6 ML review fixes
+
+See [PHASE6_ML_INTEGRATION.md](PHASE6_ML_INTEGRATION.md) for current/history unit
+normalization, explicit skin-temperature mapping and precedence, out-of-domain
+ML quality handling, and real Uvicorn end-to-end tests. Raw stored readings are
+preserved. Legacy `temperature` is used for ML only with the explicit analysis
+request flag `temperature_is_skin: true`; `skin_temperature` needs no such flag.
+Twin/alert APIs and browser integration remain separate Phase 6 work.
