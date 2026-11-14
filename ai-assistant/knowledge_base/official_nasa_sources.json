@@ -1,0 +1,62 @@
+[
+  {
+    "document_id": "nasa-hrp-overview",
+    "title": "NASA Human Research Program",
+    "publisher": "NASA",
+    "author": "NASA Human Research Program",
+    "publication_date": "2026-11-14",
+    "source_url": "https://www.nasa.gov/humans-in-space/space-human-research-program/",
+    "section_id": "overview",
+    "category": "astronaut health",
+    "description": "Official NASA overview of human health risks, including bone and muscle changes, sleep disruption, and radiation effects during exploration missions.",
+    "content": "NASA's Human Research Program investigates the health challenges facing astronauts in space, including bone and muscle loss, sleep and circadian disruption, and radiation exposure. These studies guide countermeasures and mission planning."
+  },
+  {
+    "document_id": "nasa-bone-muscle-loss",
+    "title": "Bone and Muscle Loss in Space",
+    "publisher": "NASA",
+    "author": "NASA Mission Pages",
+    "publication_date": "2026-11-14",
+    "source_url": "https://www.nasa.gov/mission_pages/station/research/benefits/space-bone-loss.html",
+    "section_id": "bone-muscle-loss",
+    "category": "bone density",
+    "description": "Official NASA explanation of microgravity-related changes in bone density and skeletal muscle during spaceflight.",
+    "content": "Microgravity affects bone remodeling and muscle function, creating risks for astronauts during long-duration missions. NASA documents these structural and physiological changes as part of human research and countermeasure development."
+  },
+  {
+    "document_id": "nasa-sleep-rhythm",
+    "title": "Sleep and Circadian Rhythm Research",
+    "publisher": "NASA",
+    "author": "NASA Human Research Program",
+    "publication_date": "2026-11-14",
+    "source_url": "https://www.nasa.gov/mission_pages/station/research/benefits/sleep.html",
+    "section_id": "sleep-circadian",
+    "category": "sleep",
+    "description": "Official NASA topic area covering sleep, circadian rhythms, and behavioral health in orbital missions.",
+    "content": "Astronaut sleep can be affected by mission schedules, light-dark cycles, confinement, and operational demands. NASA studies these factors as part of crew health and performance protection."
+  },
+  {
+    "document_id": "nasa-radiation-health",
+    "title": "Space Radiation and Human Health",
+    "publisher": "NASA",
+    "author": "NASA Space Radiation Analysis Group",
+    "publication_date": "2026-11-14",
+    "source_url": "https://www.nasa.gov/mission_pages/station/research/benefits/space-radiation.html",
+    "section_id": "radiation-health",
+    "category": "radiation",
+    "description": "Official NASA discussion of ionizing radiation exposure in space and its relevance to astronaut health and mission design.",
+    "content": "Radiation exposure is a major concern for long-duration missions beyond low-Earth orbit. NASA monitors radiation risks and evaluates shielding, medical countermeasures, and operational limits."
+  },
+  {
+    "document_id": "nasa-microgravity-effects",
+    "title": "Microgravity Effects on Human Physiology",
+    "publisher": "NASA",
+    "author": "NASA Human Research Program",
+    "publication_date": "2026-11-14",
+    "source_url": "https://www.nasa.gov/mission_pages/station/research/benefits/microgravity.html",
+    "section_id": "microgravity-effects",
+    "category": "microgravity",
+    "description": "Official NASA overview of the physiological impact of microgravity on the human body, including musculoskeletal, cardiovascular, and vestibular systems.",
+    "content": "Extended exposure to microgravity can change cardiovascular function, musculoskeletal health, balance, and fluid distribution. NASA uses these findings to shape mission planning and mitigation strategies."
+  }
+]
