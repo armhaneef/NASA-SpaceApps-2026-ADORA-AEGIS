@@ -6,9 +6,9 @@ export const HEALTH_BASELINE = Object.freeze({
 })
 
 export const HEALTH_SEVERITY_COLORS = Object.freeze({
-  normal: '#00D9FF',
-  warning: '#FFCC00',
-  critical: '#FF304F',
+  normal: '#00D5F2',
+  warning: '#FFD43B',
+  critical: '#FF4757',
 })
 
 export const DEMO_THRESHOLDS = Object.freeze({

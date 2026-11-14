@@ -22,9 +22,9 @@ test('all six demo scenarios create complete, synthetic readings', () => {
 
 test('health severity colors use the specified holographic palette', () => {
   assert.deepEqual(HEALTH_SEVERITY_COLORS, {
-    normal: '#00D9FF',
-    warning: '#FFCC00',
-    critical: '#FF304F',
+    normal: '#00D5F2',
+    warning: '#FFD43B',
+    critical: '#FF4757',
   })
 })
 

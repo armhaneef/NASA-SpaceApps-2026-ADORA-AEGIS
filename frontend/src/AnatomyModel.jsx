@@ -120,22 +120,39 @@ function getCloneModel(scene) {
   return { scene: clone, scale, clonedMaterials, focusPoints, localPositions }
 }
 
-function styleModel(model, mode, selected, regionStatuses) {
+function getLayerGroup(object) {
+  let current = object
+  while (current) {
+    const name = current.name?.toLowerCase()
+    if (['skin', 'skeleton', 'muscles', 'organs', 'vessels', 'nerves'].includes(name)) {
+      return name
+    }
+    current = current.parent
+  }
+  return null
+}
+
+function styleModel(model, mode, selected, regionStatuses, layer = 'full') {
   const criticalMaterials = []
 
   model.scene.traverse((object) => {
     if (!object.isMesh) return
 
     const region = object.userData.aegisRegion
+    const layerGroup = getLayerGroup(object)
     const isSkin = object.name.toLowerCase() === 'skin'
     const materials = Array.isArray(object.material) ? object.material : [object.material]
+    const isSelected = region && selected === region
+    const isWireframe = mode === 'wireframe'
+    const status = regionStatuses[region] ?? 'normal'
+    const severityColor = HEALTH_SEVERITY_COLORS[status] ?? HEALTH_SEVERITY_COLORS.normal
+    const layerMatch = layer === 'full' || layerGroup === layer
+    const keepVisible = isSelected || layerMatch
+    object.visible = keepVisible
 
     materials.forEach((material) => {
-      const isSelected = region && selected === region
-      const isWireframe = mode === 'wireframe'
-      const status = regionStatuses[region] ?? 'normal'
-      const severityColor = HEALTH_SEVERITY_COLORS[status] ?? HEALTH_SEVERITY_COLORS.normal
       const original = material.userData.aegisOriginal
+      const paletteColor = isSkin ? '#4f9bac' : severityColor
 
       material.color.copy(original.color)
       material.emissive.copy(original.emissive)
@@ -143,16 +160,38 @@ function styleModel(model, mode, selected, regionStatuses) {
       material.roughness = 0.48
       material.metalness = 0.12
       material.transparent = true
-      material.color.set(isSkin ? '#4f9bac' : severityColor)
-      material.emissive.set(isSkin ? '#145364' : severityColor)
+      material.color.set(paletteColor)
+      material.emissive.set(paletteColor)
       material.emissiveIntensity = isSkin ? 0.12 : isSelected ? 0.58 : status === 'critical' ? 0.38 : 0.24
+
+      const layerOpacity = layer === 'full'
+        ? (isSkin ? 0.19 : 0.76)
+        : layerGroup === 'skin'
+          ? 0.04
+          : layerGroup === 'skeleton'
+            ? 0.96
+            : layerGroup === 'muscles'
+              ? 0.92
+              : layerGroup === 'organs'
+                ? 0.92
+                : layerGroup === 'vessels'
+                  ? 0.86
+                  : layerGroup === 'nerves'
+                    ? 0.8
+                    : 0.7
+
       material.opacity = isSkin
-        ? mode === 'outer' ? 0.19 : 0.055
-        : mode === 'outer'
-          ? 0.76
-          : isWireframe
-            ? 0.9
-            : 0.88
+        ? mode === 'outer' ? layerOpacity : 0.055
+        : isWireframe
+          ? 0.9
+          : isSelected
+            ? 0.96
+            : layer === 'full' || layerGroup === layer
+              ? layerOpacity
+              : layerGroup === null
+                ? 0.7
+                : 0.18
+
       material.depthWrite = false
       material.side = THREE.DoubleSide
       material.wireframe = isWireframe
@@ -194,13 +233,13 @@ function FallbackSilhouette() {
   )
 }
 
-function LoadedModel({ scene, mode, selected, regionStatuses, onSelect, onModelInfo }) {
+function LoadedModel({ scene, mode, layer, selected, regionStatuses, onSelect, onModelInfo }) {
   const model = useMemo(() => getCloneModel(scene), [scene])
   const criticalMaterials = useRef([])
 
   useEffect(() => {
-    criticalMaterials.current = styleModel(model, mode, selected, regionStatuses)
-  }, [model, mode, regionStatuses, selected])
+    criticalMaterials.current = styleModel(model, mode, selected, regionStatuses, layer)
+  }, [model, mode, regionStatuses, selected, layer])
 
   useFrame(({ clock }) => {
     const pulse = 0.82 + Math.sin(clock.elapsedTime * 5) * 0.18
@@ -245,6 +284,7 @@ function LoadedModel({ scene, mode, selected, regionStatuses, onSelect, onModelI
 
 export default function AnatomyModel({
   mode,
+  layer,
   selected,
   regionStatuses,
   onSelect,
@@ -290,6 +330,7 @@ export default function AnatomyModel({
         <LoadedModel
           scene={asset}
           mode={mode}
+          layer={layer}
           selected={selected}
           regionStatuses={regionStatuses}
           onSelect={onSelect}

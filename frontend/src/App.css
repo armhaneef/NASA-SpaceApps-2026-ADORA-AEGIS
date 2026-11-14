@@ -863,6 +863,7 @@
   bottom: 47px;
   left: 12px;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: center;
   gap: 8px;
@@ -1787,9 +1788,9 @@
   letter-spacing: 0.04em;
 }
 
-.status-normal { color: #00D9FF; }
-.status-warning { color: #FFCC00; }
-.status-critical { color: #FF304F; }
+.status-normal { color: #00D5F2; }
+.status-warning { color: #FFD43B; }
+.status-critical { color: #FF4757; }
 .status-no-data { color: #8499a0; }
 
 .demo-rule-status.status-warning,
@@ -1801,34 +1802,34 @@
 .demo-rule-status.status-normal .ml-icon,
 .demo-rule-status.status-normal .ml-copy strong,
 .demo-rule-status.status-normal .ml-score {
-  color: #00D9FF;
+  color: #00D5F2;
 }
 
 .demo-rule-status.status-normal .ml-copy strong i {
-  background: #00D9FF;
-  box-shadow: 0 0 6px #00D9FF;
+  background: #00D5F2;
+  box-shadow: 0 0 6px #00D5F2;
 }
 
 .demo-rule-status.status-warning .ml-icon,
 .demo-rule-status.status-warning .ml-copy strong,
 .demo-rule-status.status-warning .ml-score {
-  color: #FFCC00;
+  color: #FFD43B;
 }
 
 .demo-rule-status.status-critical .ml-icon,
 .demo-rule-status.status-critical .ml-copy strong,
 .demo-rule-status.status-critical .ml-score {
-  color: #FF304F;
+  color: #FF4757;
 }
 
 .demo-rule-status.status-warning .ml-copy strong i {
-  background: #FFCC00;
-  box-shadow: 0 0 6px #FFCC00;
+  background: #FFD43B;
+  box-shadow: 0 0 6px #FFD43B;
 }
 
 .demo-rule-status.status-critical .ml-copy strong i {
-  background: #FF304F;
-  box-shadow: 0 0 6px #FF304F;
+  background: #FF4757;
+  box-shadow: 0 0 6px #FF4757;
 }
 
 .demo-rule-status .ml-score {
@@ -1858,9 +1859,9 @@
   border-radius: 50%;
 }
 
-.legend-normal { background: #00D9FF; }
-.legend-warning { background: #FFCC00; }
-.legend-critical { background: #FF304F; }
+.legend-normal { background: #00D5F2; }
+.legend-warning { background: #FFD43B; }
+.legend-critical { background: #FF4757; }
 .legend-no-data { background: #8499a0; }
 
 .alert-item {
@@ -1881,15 +1882,15 @@
 }
 
 .alert-item-warning .alert-mark {
-  border-color: rgba(255, 204, 0, 0.28);
-  color: #FFCC00;
-  background: rgba(255, 204, 0, 0.08);
+  border-color: rgba(255, 212, 59, 0.28);
+  color: #FFD43B;
+  background: rgba(255, 212, 59, 0.08);
 }
 
 .alert-item-critical .alert-mark {
-  border-color: rgba(255, 48, 79, 0.3);
-  color: #FF304F;
-  background: rgba(255, 48, 79, 0.09);
+  border-color: rgba(255, 71, 87, 0.3);
+  color: #FF4757;
+  background: rgba(255, 71, 87, 0.09);
 }
 
 .alert-copy {
@@ -1912,8 +1913,8 @@
   line-height: 1.45;
 }
 
-.alert-item-warning .alert-type { color: #FFCC00; }
-.alert-item-critical .alert-type { color: #FF304F; }
+.alert-item-warning .alert-type { color: #FFD43B; }
+.alert-item-critical .alert-type { color: #FF4757; }
 
 .no-alerts,
 .alert-disclaimer {
