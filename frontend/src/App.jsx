@@ -338,6 +338,7 @@ function CameraFocus({ controlsRef, selected, focusPoints }) {
 
 function DigitalHuman({
   mode,
+  layer,
   selected,
   scan,
   regionStatuses,
@@ -376,6 +377,7 @@ function DigitalHuman({
       <Sparkles count={110} scale={[4.5, 5.2, 3.5]} size={2.2} speed={0.18} opacity={0.58} color="#85eaff" />
       <AnatomyModel
         mode={mode}
+        layer={layer}
         selected={selected}
         regionStatuses={regionStatuses}
         onSelect={onSelect}
@@ -791,6 +793,8 @@ function RightHud({
 
 function ViewControls({
   mode,
+  layer,
+  setLayer,
   setMode,
   labels,
   setLabels,
@@ -823,6 +827,24 @@ function ViewControls({
             onClick={() => setMode(value)}
           >
             {value === 'wireframe' ? <Move3D size={13} /> : value === 'anatomy' ? <Activity size={13} /> : <ScanLine size={13} />}
+            {label}
+          </button>
+        ))}
+      </div>
+      <div className="control-group layer-controls" role="group" aria-label="Anatomical layer">
+        {[
+          ['full', 'FULL BODY'],
+          ['skeleton', 'SKELETON'],
+          ['muscles', 'MUSCLES'],
+          ['organs', 'ORGANS'],
+        ].map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            className={layer === value ? 'control-active' : ''}
+            aria-pressed={layer === value}
+            onClick={() => setLayer(value)}
+          >
             {label}
           </button>
         ))}
@@ -861,6 +883,7 @@ function App() {
   const [scenarioId, setScenarioId] = useState('normal')
   const [thresholds, setThresholds] = useState(DEMO_THRESHOLDS)
   const [mode, setMode] = useState('outer')
+  const [layer, setLayer] = useState('full')
   const [labels, setLabels] = useState(true)
   const [scan, setScan] = useState(true)
   const [modelStatus, setModelStatus] = useState('loading')
@@ -1006,6 +1029,7 @@ function App() {
           <div className="scene-wrap">
             <DigitalHuman
               mode={mode}
+              layer={layer}
               selected={selectedRegion}
               scan={scan}
               regionStatuses={regionStatuses}
@@ -1031,6 +1055,8 @@ function App() {
           </div>
           <ViewControls
             mode={mode}
+            layer={layer}
+            setLayer={setLayer}
             setMode={setMode}
             labels={labels}
             setLabels={setLabels}
