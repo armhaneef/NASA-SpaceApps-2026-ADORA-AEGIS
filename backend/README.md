@@ -4,11 +4,14 @@ The backend owns the HTTP API boundary. Its initial FastAPI application exposes
 a health check so the service can be started and checked before other modules
 are integrated.
 
-**Inputs:** HTTP requests. Future sensor endpoints should accept validated JSON
-that follows [`docs/data-schema.md`](../docs/data-schema.md).
+**Inputs:** HTTP requests and validated numeric sensor records. Shared conventions
+are in [`docs/data-schema.md`](../docs/data-schema.md); the implemented backend
+formats and required provenance extensions are in [PHASE3_API.md](PHASE3_API.md).
 
-**Outputs:** JSON responses documented in
-[`docs/api-contracts.md`](../docs/api-contracts.md).
+**Outputs:** JSON responses described below and in
+[FRONTEND_INTEGRATION.md](FRONTEND_INTEGRATION.md). The shared
+[`docs/api-contracts.md`](../docs/api-contracts.md) still documents only the initial
+health endpoint and has not been edited by backend development.
 
 ## Phase 1 setup in PyCharm
 
@@ -252,4 +255,66 @@ normalization, explicit skin-temperature mapping and precedence, out-of-domain
 ML quality handling, and real Uvicorn end-to-end tests. Raw stored readings are
 preserved. Legacy `temperature` is used for ML only with the explicit analysis
 request flag `temperature_is_skin: true`; `skin_temperature` needs no such flag.
-Twin/alert APIs and browser integration remain separate Phase 6 work.
+Twin/alert APIs remain separate Phase 6 work. Browser integration preparation is
+described below.
+
+## Phase 6: frontend integration preparation
+
+CORS now permits the approved React origin `http://localhost:5173` by default.
+`AEGIS_CORS_ORIGINS` accepts a JSON array of explicit origins and replaces the
+default; wildcard origins are rejected. Credentials are disabled. Configure this
+in the PyCharm Run Configuration or terminal, and restart the backend after changes:
+
+```powershell
+$env:AEGIS_CORS_ORIGINS = '["http://localhost:5173"]'
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+```
+
+Run from `backend` using its existing interpreter. `.env.example` documents the
+setting; an `.env` file is loaded only when explicitly passed with `--env-file`.
+No dependency, database schema, route path or success-response shape changed.
+
+### Implemented endpoint inventory
+
+| Method | Path | Success |
+| --- | --- | --- |
+| GET | `/health` | 200, `{"status":"ok"}` |
+| POST | `/astronauts` | 201, created profile |
+| GET | `/astronauts` | 200, profile array; limit/offset |
+| GET | `/astronauts/{astronaut_id}` | 200, profile |
+| PATCH | `/astronauts/{astronaut_id}` | 200, updated profile |
+| DELETE | `/astronauts/{astronaut_id}` | 204, no body; 409 when referenced |
+| POST | `/health/ingest` | 201, stored-reading array |
+| GET | `/health/{astronaut_id}/latest` | 200, newest reading per measurement type |
+| GET | `/health/{astronaut_id}/history` | 200, chronological array; type/time filters, limit/offset |
+| POST | `/health/{astronaut_id}/analyses` | 201, saved mock/local analysis |
+| GET | `/health/{astronaut_id}/analyses` | 200, full saved-analysis array; newest first, limit/offset |
+| GET | `/health/{astronaut_id}/analyses/latest` | 200, latest saved analysis; 404 if none |
+| GET | `/health/{astronaut_id}/analyses/{analysis_id}` | 200, astronaut-scoped saved analysis |
+| POST | `/ai/assistant` | 200, labelled mock or configured-provider response |
+
+Responses use typed Pydantic models. Errors use `detail` as a string or validation
+array; DELETE is the deliberate empty-body exception. Keep null anomaly values
+distinct from false/zero and show mock provenance. Runtime OpenAPI is at
+`/openapi.json` and interactive documentation at `/docs`.
+
+[FRONTEND_INTEGRATION.md](FRONTEND_INTEGRATION.md) provides copyable JSON response
+examples, Fetch usage, CORS verification, response ordering, units, error handling,
+and pending Member 5 decisions. Tests cover the existing CRUD, ingestion, history,
+analysis and assistant APIs; `tests/test_cors.py` adds browser-origin and preflight
+checks. Run the full suite with:
+
+```powershell
+.\.venv\Scripts\python.exe -B -m pytest tests -q -p no:cacheprovider
+```
+
+The existing 11 real-ML HTTP cases remain part of that suite; install optional
+`requirements-ml.txt` to run them without dependency skips.
+
+### Digital Twin status
+
+No Twin endpoint, alert API or approved Twin response contract currently exists.
+[TWIN_API_PROPOSAL.md](TWIN_API_PROPOSAL.md) is a backend-local draft for Member 6
+covering indicators, baseline/anomaly provenance and explicit alert unavailability.
+It is not implemented or added to OpenAPI. Members 5 and 6 must confirm their data
+requirements and missing/stale/mock behavior before that shared response is finalized.

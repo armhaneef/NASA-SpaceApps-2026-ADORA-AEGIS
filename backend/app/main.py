@@ -5,6 +5,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
+from app.core.config import load_settings
+from app.core.cors import configure_cors
 
 from app.database.connection import init_db
 
@@ -30,6 +32,7 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+configure_cors(app, load_settings())
 
 
 app.include_router(health_router)
