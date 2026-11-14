@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AEGIS ML Phase 2 analysis response, schema 1.0",
+  "description": "All current fields are required. Additional fields are allowed for additive compatibility. Scores are not medical probabilities.",
+  "type": "object",
+  "required": ["schema_version", "astronaut_id", "timestamp", "data_source", "sensor_readings", "baseline", "anomaly", "trends", "data_quality", "model"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "astronaut_id": {"type": ["string", "null"]},
+    "timestamp": {"type": ["string", "null"], "description": "Input string preserved even if invalid; consult data_quality."},
+    "data_source": {"type": ["string", "null"]},
+    "sensor_readings": {
+      "type": "object", "required": ["heart_rate", "spo2", "temperature"],
+      "properties": {
+        "heart_rate": {"allOf": [{"$ref": "#/$defs/measurement"}, {"properties": {"unit": {"const": "beats/min"}, "value": {"minimum": 20, "maximum": 250}}}]},
+        "spo2": {"allOf": [{"$ref": "#/$defs/measurement"}, {"properties": {"unit": {"const": "%"}, "value": {"minimum": 0, "maximum": 100}}}]},
+        "temperature": {"allOf": [{"$ref": "#/$defs/measurement"}, {"properties": {"unit": {"const": "degC"}, "value": {"minimum": 10, "maximum": 50}}}]}
+      }
+    },
+    "baseline": {
+      "type": "object", "required": ["heart_rate", "spo2", "temperature"],
+      "properties": {
+        "heart_rate": {"allOf": [{"$ref": "#/$defs/baseline"}, {"properties": {"unit": {"const": "beats/min"}}}]},
+        "spo2": {"allOf": [{"$ref": "#/$defs/baseline"}, {"properties": {"unit": {"const": "%"}}}]},
+        "temperature": {"allOf": [{"$ref": "#/$defs/baseline"}, {"properties": {"unit": {"const": "degC"}}}]}
+      }
+    },
+    "anomaly": {
+      "type": "object", "required": ["status", "is_anomaly", "sensors", "method", "normalized_score", "sensor_method"],
+      "properties": {
+        "status": {"$ref": "#/$defs/status"},
+        "is_anomaly": {"type": ["boolean", "null"]},
+        "sensors": {
+          "type": "object", "required": ["heart_rate", "spo2", "temperature"],
+          "properties": {"heart_rate": {"$ref": "#/$defs/sensorResult"}, "spo2": {"$ref": "#/$defs/sensorResult"}, "temperature": {"$ref": "#/$defs/sensorResult"}}
+        },
+        "method": {"$ref": "#/$defs/method"},
+        "normalized_score": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+        "sensor_method": {"const": "personalized_baseline_deviation"}
+      }
+    },
+    "trends": {
+      "type": "object", "required": ["heart_rate", "spo2", "temperature"],
+      "properties": {
+        "heart_rate": {"allOf": [{"$ref": "#/$defs/trend"}, {"properties": {"unit": {"const": "beats/min/hour"}}}]},
+        "spo2": {"allOf": [{"$ref": "#/$defs/trend"}, {"properties": {"unit": {"const": "%/hour"}}}]},
+        "temperature": {"allOf": [{"$ref": "#/$defs/trend"}, {"properties": {"unit": {"const": "degC/hour"}}}]}
+      }
+    },
+    "data_quality": {
+      "type": "object", "required": ["status", "errors", "history_issues", "history_records_received", "history_records_accepted"],
+      "properties": {
+        "status": {"enum": ["valid", "partial", "invalid"]},
+        "errors": {"$ref": "#/$defs/errors"},
+        "history_issues": {"type": "array", "items": {
+          "type": "object", "required": ["index", "errors"],
+          "properties": {"index": {"$ref": "#/$defs/count"}, "errors": {"$ref": "#/$defs/errors"}}
+        }},
+        "history_records_received": {"$ref": "#/$defs/count"},
+        "history_records_accepted": {"$ref": "#/$defs/count"}
+      }
+    },
+    "model": {
+      "type": "object", "required": ["name", "version", "minimum_history_per_sensor", "deviation_threshold", "synthetic_only", "clinically_validated", "isolation_forest", "score_normalization"],
+      "properties": {
+        "name": {"$ref": "#/$defs/method"}, "version": {"const": "2.0.0"},
+        "minimum_history_per_sensor": {"const": 3}, "deviation_threshold": {"const": 3.0},
+        "synthetic_only": {"const": true}, "clinically_validated": {"const": false},
+        "score_normalization": {"enum": ["clip(-score_samples, 0, 1)", "max_deviation / (max_deviation + 3)"]},
+        "isolation_forest": {
+          "type": "object", "required": ["minimum_history", "training_records", "features", "random_state", "n_estimators", "contamination", "sklearn_version", "used", "fallback_reason", "score_threshold"],
+          "properties": {
+            "minimum_history": {"const": 32}, "training_records": {"$ref": "#/$defs/count"},
+            "features": {"const": ["heart_rate", "spo2", "temperature"]},
+            "random_state": {"const": 42}, "n_estimators": {"const": 100}, "contamination": {"const": 0.05},
+            "sklearn_version": {"type": "string"}, "used": {"type": "boolean"},
+            "fallback_reason": {"enum": [null, "invalid_current_metadata", "incomplete_current_sensors", "insufficient_complete_history", "constant_history"]},
+            "score_threshold": {"type": ["number", "null"]}
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "count": {"type": "integer", "minimum": 0},
+    "nullableNumber": {"type": ["number", "null"]},
+    "errors": {"type": "object", "additionalProperties": {"type": "string"}},
+    "status": {"enum": ["normal", "anomaly", "insufficient_data"]},
+    "method": {"enum": ["personalized_baseline_deviation", "isolation_forest"]},
+    "measurement": {
+      "type": "object", "required": ["value", "unit"],
+      "properties": {"value": {"$ref": "#/$defs/nullableNumber"}, "unit": {"type": "string"}}
+    },
+    "baseline": {
+      "type": "object", "required": ["count", "mean", "std", "scale", "unit", "ready"],
+      "properties": {
+        "count": {"$ref": "#/$defs/count"}, "mean": {"$ref": "#/$defs/nullableNumber"},
+        "std": {"type": ["number", "null"], "minimum": 0},
+        "scale": {"type": ["number", "null"], "exclusiveMinimum": 0},
+        "unit": {"type": "string"}, "ready": {"type": "boolean"}
+      }
+    },
+    "sensorResult": {
+      "type": "object", "required": ["status", "deviation_score"],
+      "properties": {"status": {"$ref": "#/$defs/status"}, "deviation_score": {"type": ["number", "null"], "minimum": 0}}
+    },
+    "trend": {
+      "type": "object", "required": ["direction", "count", "slope_per_hour", "unit", "fitted_change", "change_threshold", "start_timestamp", "end_timestamp"],
+      "properties": {
+        "direction": {"enum": ["increasing", "decreasing", "stable", "unknown"]},
+        "count": {"$ref": "#/$defs/count"}, "slope_per_hour": {"$ref": "#/$defs/nullableNumber"},
+        "unit": {"type": "string"}, "fitted_change": {"$ref": "#/$defs/nullableNumber"},
+        "change_threshold": {"type": "number", "exclusiveMinimum": 0},
+        "start_timestamp": {"type": ["string", "null"]}, "end_timestamp": {"type": ["string", "null"]}
+      }
+    }
+  }
+}
