@@ -12,6 +12,18 @@ def test_health_route():
     assert response.json()["status"] == "ok"
 
 
+def test_vite_origin_is_explicitly_allowed_for_chat_ui():
+    response = client.options(
+        "/api/v1/chat",
+        headers={
+            "Origin": "http://localhost:5173",
+            "Access-Control-Request-Method": "POST",
+        },
+    )
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "http://localhost:5173"
+
+
 def test_demo_route():
     response = client.get("/api/v1/demo")
     assert response.status_code == 200
@@ -58,6 +70,43 @@ def test_chat_route():
     response = client.post("/api/v1/chat", json=payload)
     assert response.status_code == 200
     assert "answer" in response.json()
+
+
+def test_chat_reports_real_provider_success_as_online(monkeypatch):
+    class SuccessfulProvider:
+        offline = False
+
+        def generate(self, prompt, *, system_prompt=None, temperature=0.2):
+            assert "Question: Explain the sleep schedule." in prompt
+            return "Model-generated response for this test."
+
+    monkeypatch.setattr("app.api.routes.LLMService", SuccessfulProvider)
+    response = client.post("/api/v1/chat", json={
+        "astronaut_id": "AST-SYNTHETIC-01",
+        "question": "Explain the sleep schedule.",
+    })
+
+    assert response.status_code == 200
+    assert response.json()["answer"] == "Model-generated response for this test."
+    assert response.json()["offline_mode"] is False
+
+
+def test_chat_marks_provider_failure_fallback_as_offline(monkeypatch):
+    class FailingProvider:
+        offline = False
+
+        def generate(self, prompt, *, system_prompt=None, temperature=0.2):
+            raise RuntimeError("provider unavailable")
+
+    monkeypatch.setattr("app.api.routes.LLMService", FailingProvider)
+    response = client.post("/api/v1/chat", json={
+        "astronaut_id": "AST-SYNTHETIC-01",
+        "question": "Explain the sleep schedule.",
+    })
+
+    assert response.status_code == 200
+    assert response.json()["offline_mode"] is True
+    assert "offline mode" in response.json()["answer"].lower()
 
 
 def test_voice_demo_route():

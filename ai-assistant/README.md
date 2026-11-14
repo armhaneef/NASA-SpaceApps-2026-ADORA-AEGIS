@@ -26,24 +26,41 @@ cd ai-assistant
 python -m venv .venv
 .venv\Scripts\activate.bat
 python -m pip install -r requirements.txt
-set LLM_PROVIDER=offline
+Copy-Item .env.example .env
+notepad .env
 python -m uvicorn app.main:app --reload
 ```
 
 Then open:
 
-- http://127.0.0.1:8000/docs
-- http://127.0.0.1:8000/api/v1/demo
+- http://127.0.0.1:8001/docs
+- http://127.0.0.1:8001/api/v1/demo
 
 ## Environment variables
 
 ```env
 LLM_PROVIDER=offline
-LLM_MODEL=
-LLM_BASE_URL=
-LLM_API_KEY=
-LLM_TIMEOUT_SECONDS=30
+OPENAI_MODEL=gpt-4o-mini
+OPENAI_BASE_URL=https://api.openai.com/v1
+OPENAI_API_KEY=
+LLM_TIMEOUT_SECONDS=60
+LLM_MAX_OUTPUT_TOKENS=600
+LLM_MAX_RETRIES=1
 ```
+
+For the official OpenAI Responses API, set `LLM_PROVIDER=openai` and put a newly generated API key in the ignored local `.env` file. The key must never be placed in frontend code, committed, or pasted into chat. `LLM_PROVIDER=offline` remains the safe default; `LLM_PROVIDER=openai_compatible` and `LLM_PROVIDER=ollama` remain available for existing deployments.
+
+OpenAI API billing is separate from a ChatGPT Plus subscription. Plus provides ChatGPT product access; API usage requires an API Platform account with billing/credits configured and is charged by API usage. See the official [API billing overview](https://help.openai.com/en/articles/9039756-billing-settings-in-chatgpt-vs-platform) and [API billing setup](https://help.openai.com/en/articles/8264644-how-can-i-set-up-prepaid-billing).
+
+To run a live test on the team-safe port after configuring billing and receiving approval:
+
+```powershell
+python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8001
+$body = @{ astronaut_id = "AST-SYNTHETIC-01"; question = "Introduce yourself as AEGIS and explain how you support astronaut health monitoring. Do not invent sensor readings." } | ConvertTo-Json
+Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8001/api/v1/chat -ContentType "application/json" -Body $body
+```
+
+Automated tests use mocks and never make paid API calls. See `OPENAI_CLOUD_VERIFICATION.md` for the evidence report.
 
 ## Demo payload
 

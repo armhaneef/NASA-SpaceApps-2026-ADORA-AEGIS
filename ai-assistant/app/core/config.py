@@ -32,6 +32,19 @@ def _get_int_env(name: str, default: int) -> int:
     return value if value > 0 else default
 
 
+def _get_allowed_origins() -> tuple[str, ...]:
+    defaults = (
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    )
+    configured = os.getenv("AI_ALLOWED_ORIGINS", "").strip()
+    if not configured:
+        return defaults
+    return tuple(origin.strip().rstrip("/") for origin in configured.split(",") if origin.strip())
+
+
 _load_local_env()
 
 
@@ -40,10 +53,20 @@ class Settings:
     app_name: str = "adora-aegis-ai"
     env_file: str | None = None
     llm_provider: str = os.getenv("LLM_PROVIDER", "offline").strip().lower()
-    llm_model: str = os.getenv("LLM_MODEL", "").strip()
+    llm_model: str = os.getenv("OPENAI_MODEL", os.getenv("LLM_MODEL", "")).strip()
     llm_base_url: str = os.getenv("LLM_BASE_URL", "").strip()
-    llm_api_key: str = os.getenv("LLM_API_KEY", "").strip()
-    llm_timeout_seconds: int = _get_int_env("LLM_TIMEOUT_SECONDS", 30)
+    # OPENAI_API_KEY is the canonical cloud setting. LLM_API_KEY remains a
+    # compatibility fallback for existing OpenAI-compatible/Ollama setups.
+    llm_api_key: str = os.getenv("OPENAI_API_KEY", os.getenv("LLM_API_KEY", "")).strip()
+    openai_api_key: str = os.getenv("OPENAI_API_KEY", "").strip()
+    openai_model: str = os.getenv("OPENAI_MODEL", os.getenv("LLM_MODEL", "")).strip()
+    openai_base_url: str = os.getenv(
+        "OPENAI_BASE_URL", os.getenv("LLM_BASE_URL", "https://api.openai.com/v1")
+    ).strip()
+    llm_timeout_seconds: int = _get_int_env("LLM_TIMEOUT_SECONDS", 60)
+    llm_max_output_tokens: int = _get_int_env("LLM_MAX_OUTPUT_TOKENS", 600)
+    llm_max_retries: int = _get_int_env("LLM_MAX_RETRIES", 1)
+    allowed_origins: tuple[str, ...] = _get_allowed_origins()
     knowledge_base_dir: Path = Path(__file__).resolve().parents[2] / "knowledge_base"
     approved_docs_dir: Path = knowledge_base_dir / "approved_documents"
     data_dir: Path = Path(__file__).resolve().parents[2] / "data"

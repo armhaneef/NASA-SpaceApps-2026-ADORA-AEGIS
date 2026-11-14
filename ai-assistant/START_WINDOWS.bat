@@ -21,5 +21,5 @@ python -m pip install -r requirements.txt
 
 echo.
 echo Starting ADORA AEGIS AI assistant...
-echo Local API: http://127.0.0.1:8000/docs
-python -m uvicorn app.main:app --reload
+echo Local API: http://127.0.0.1:8001/docs
+python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8001

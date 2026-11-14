@@ -61,6 +61,51 @@ def test_openai_compatible_with_credentials_uses_chat_completions(monkeypatch):
     assert post.call_args.kwargs["timeout"] == 7
 
 
+def test_gpt54_mini_chat_request_omits_unsupported_sampling_parameters(monkeypatch):
+    monkeypatch.setattr(
+        llm_service,
+        "settings",
+        _settings("openai_compatible", "gpt-5.4-mini", "test-key", "https://api.openai.com/v1/chat/completions"),
+    )
+    response = MagicMock()
+    response.raise_for_status.return_value = None
+    response.json.return_value = {"choices": [{"message": {"content": "generated"}}]}
+
+    with patch("httpx.post", return_value=response) as post:
+        answer = LLMService().generate("A non-alert question.")
+
+    assert answer == "generated"
+    payload = post.call_args.kwargs["json"]
+    assert payload == {
+        "model": "gpt-5.4-mini",
+        "messages": [
+            {"role": "system", "content": "You are a cautious, evidence-grounded astronaut health assistant."},
+            {"role": "user", "content": "A non-alert question."},
+        ],
+    }
+    assert post.call_args.args[0] == "https://api.openai.com/v1/chat/completions"
+
+
+@pytest.mark.parametrize("status_code", [401, 403, 429, 500])
+def test_openai_http_status_errors_are_reported_without_fallback(monkeypatch, status_code):
+    monkeypatch.setattr(llm_service, "settings", _settings("openai_compatible", "gpt-5.4-mini", "test-key"))
+    request = httpx.Request("POST", "https://api.openai.com/v1/chat/completions")
+    response = httpx.Response(status_code, request=request)
+    error = httpx.HTTPStatusError("provider error", request=request, response=response)
+
+    with patch("httpx.post", side_effect=error):
+        with pytest.raises(LLMCallError, match=str(status_code)):
+            LLMService().generate("A non-alert question.")
+
+
+def test_openai_timeout_is_reported(monkeypatch):
+    monkeypatch.setattr(llm_service, "settings", _settings("openai_compatible", "gpt-5.4-mini", "test-key"))
+
+    with patch("httpx.post", side_effect=httpx.ReadTimeout("timed out")):
+        with pytest.raises(LLMCallError, match="timed out"):
+            LLMService().generate("A non-alert question.")
+
+
 def test_ollama_does_not_require_api_key_and_uses_generate_api(monkeypatch):
     monkeypatch.setattr(llm_service, "settings", _settings("ollama", "llama3.1", base_url="http://localhost:11434/"))
     response = MagicMock()
@@ -80,8 +125,8 @@ def test_ollama_does_not_require_api_key_and_uses_generate_api(monkeypatch):
     assert "headers" not in post.call_args.kwargs
 
 
-def test_provider_connection_error_is_reported(monkeypatch):
-    monkeypatch.setattr(llm_service, "settings", _settings("openai", "model-test", "test-key"))
+def test_compatible_provider_connection_error_is_reported(monkeypatch):
+    monkeypatch.setattr(llm_service, "settings", _settings("openai_compatible", "model-test", "test-key"))
 
     with patch("httpx.post", side_effect=httpx.ConnectError("connection refused")):
         with pytest.raises(LLMCallError, match="request failed"):
@@ -90,7 +135,7 @@ def test_provider_connection_error_is_reported(monkeypatch):
 
 @pytest.mark.parametrize("provider_response", [{}, {"choices": []}, {"choices": [{"message": {"content": 7}}]}])
 def test_invalid_provider_response_is_rejected(monkeypatch, provider_response):
-    monkeypatch.setattr(llm_service, "settings", _settings("openai", "model-test", "test-key"))
+    monkeypatch.setattr(llm_service, "settings", _settings("openai_compatible", "model-test", "test-key"))
     response = MagicMock()
     response.raise_for_status.return_value = None
     response.json.return_value = provider_response
@@ -100,9 +145,13 @@ def test_invalid_provider_response_is_rejected(monkeypatch, provider_response):
             LLMService().generate("test")
 
 
-def test_dotenv_file_is_loaded_without_printing_credentials(tmp_path):
+def test_dotenv_file_loads_openai_configuration_without_printing_credentials(tmp_path):
     (tmp_path / ".env").write_text(
-        "LLM_PROVIDER=ollama\nLLM_MODEL=llama3.1\nLLM_API_KEY=local-test-placeholder\n",
+        "LLM_PROVIDER=openai_compatible\n"
+        "LLM_MODEL=gpt-5.4-mini\n"
+        "LLM_BASE_URL=https://api.openai.com/v1/chat/completions\n"
+        "LLM_API_KEY=\n"
+        "LLM_TIMEOUT_SECONDS=60\n",
         encoding="utf-8",
     )
     module_root = Path(__file__).resolve().parents[1]
@@ -111,7 +160,13 @@ def test_dotenv_file_is_loaded_without_printing_credentials(tmp_path):
         environment.pop(key, None)
     environment["PYTHONPATH"] = str(module_root)
     result = subprocess.run(
-        [sys.executable, "-c", "from app.core.config import settings; print(settings.llm_provider, settings.llm_model, bool(settings.llm_api_key))"],
+        [
+            sys.executable,
+            "-c",
+            "from app.core.config import settings; from app.services.llm_service import LLMService; "
+            "print(settings.llm_provider, settings.llm_model, settings.llm_base_url, "
+            "settings.llm_timeout_seconds, bool(settings.llm_api_key), LLMService().offline)",
+        ],
         cwd=tmp_path,
         env=environment,
         capture_output=True,
@@ -119,8 +174,10 @@ def test_dotenv_file_is_loaded_without_printing_credentials(tmp_path):
         check=True,
     )
 
-    assert result.stdout.strip() == "ollama llama3.1 True"
-    assert "local-test-placeholder" not in result.stdout
+    assert result.stdout.strip() == (
+        "openai_compatible gpt-5.4-mini https://api.openai.com/v1/chat/completions 60 False True"
+    )
+    assert "LLM_API_KEY" not in result.stdout
 
 
 def test_invalid_provider_raises_error():
