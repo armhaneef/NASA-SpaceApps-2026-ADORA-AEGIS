@@ -1,0 +1,21 @@
+{
+  "astronauts": [
+    {
+      "astronaut_id": "AST-001",
+      "timestamp": "2026-11-14T07:00:00Z",
+      "name": "Simulated Demo Astronaut",
+      "metric": "heart_rate",
+      "current_value": 110,
+      "baseline_value": 72,
+      "unit": "bpm",
+      "anomaly_detected": true,
+      "trend": "increasing",
+      "sensor_quality": "good",
+      "data_source": "simulated",
+      "score_definition": "example_score_not_medical_probability",
+      "model_name": "isolation_forest",
+      "status": "review",
+      "notes": "Demo astronaut context used for offline heart-rate alert explanations."
+    }
+  ]
+}

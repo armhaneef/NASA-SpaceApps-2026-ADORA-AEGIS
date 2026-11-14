@@ -1,0 +1,24 @@
+[
+  {
+    "document_id": "simulated-knowledge-1",
+    "title": "Prototype Spaceflight Health Context",
+    "publisher": "ADORA AEGIS",
+    "author": "Prototype knowledge base",
+    "publication_date": "2026-11-14",
+    "source_url": "https://example.invalid/approved",
+    "category": "spaceflight health",
+    "description": "Illustrative approved context for prototype usage. This is not a real NASA publication and must not be treated as a clinical finding.",
+    "content": "Spaceflight can affect sleep quality, circadian rhythms, and cardiovascular responses. Monitoring systems should interpret trends carefully and avoid claiming a diagnosis from a single measurement. Simulated data should be labeled as such."
+  },
+  {
+    "document_id": "simulated-knowledge-2",
+    "title": "Prototype Digital Twin and Monitoring Principles",
+    "publisher": "ADORA AEGIS",
+    "author": "Prototype knowledge base",
+    "publication_date": "2026-11-14",
+    "source_url": "https://example.invalid/digital-twin",
+    "category": "digital twin",
+    "description": "Illustrative approved context for the prototype digital twin and health monitoring workflow.",
+    "content": "A digital twin is a model that reflects current understanding of a system using available measurements and context. It should be used to explain patterns, not to assign medical diagnoses without validation."
+  }
+]

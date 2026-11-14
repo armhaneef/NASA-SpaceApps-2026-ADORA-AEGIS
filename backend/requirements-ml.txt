@@ -1,0 +1,3 @@
+# Optional: only needed to invoke Member 2's local engine.
+-r requirements.txt
+scikit-learn>=1.8,<2

@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ADORA AEGIS Voice Demo</title>
+    <style>
+      body { font-family: sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
+      textarea { width: 100%; min-height: 120px; margin-top: 1rem; }
+      button { margin-right: 0.75rem; margin-top: 1rem; padding: 0.7rem 1rem; }
+      .row { display: flex; gap: 1rem; flex-wrap: wrap; }
+      .status { margin-top: 1rem; font-weight: 600; }
+    </style>
+  </head>
+  <body>
+    <h1>ADORA AEGIS Voice Assistant Demo</h1>
+    <p>Speak a question, send it to the AI chat endpoint, and hear the response.</p>
+
+    <div class="row">
+      <button id="startButton">Start Voice Input</button>
+      <button id="speakButton">Speak AI Response</button>
+    </div>
+
+    <label for="astronautSelect">Demo astronaut:</label>
+    <select id="astronautSelect">
+      <option value="AST-001">AST-001 (simulated demo astronaut)</option>
+    </select>
+
+    <textarea id="questionBox" placeholder="Your spoken question will appear here...">Explain my heart rate alert.</textarea>
+    <button id="sendButton">Send to AI</button>
+
+    <div id="status" class="status">Status: waiting</div>
+
+    <script>
+      const questionBox = document.getElementById('questionBox');
+      const statusBox = document.getElementById('status');
+      const startButton = document.getElementById('startButton');
+      const sendButton = document.getElementById('sendButton');
+      const speakButton = document.getElementById('speakButton');
+      const astronautSelect = document.getElementById('astronautSelect');
+
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      let recognition = null;
+      let lastAnswer = '';
+
+      function setStatus(message) {
+        statusBox.textContent = `Status: ${message}`;
+      }
+
+      function handleSpeechResult(event) {
+        const transcript = Array.from(event.results)
+          .map(result => result[0].transcript)
+          .join(' ');
+        questionBox.value = transcript;
+        setStatus('Voice input captured');
+      }
+
+      if (SpeechRecognition) {
+        recognition = new SpeechRecognition();
+        recognition.lang = 'en-US';
+        recognition.continuous = false;
+        recognition.interimResults = false;
+        recognition.onresult = handleSpeechResult;
+        recognition.onerror = () => setStatus('Microphone error or permission denied');
+      } else {
+        setStatus('Browser does not support Web Speech API');
+      }
+
+      startButton.addEventListener('click', () => {
+        if (!recognition) {
+          setStatus('This browser does not support speech recognition');
+          return;
+        }
+        setStatus('Listening...');
+        recognition.start();
+      });
+
+      sendButton.addEventListener('click', async () => {
+        const question = questionBox.value.trim();
+        if (!question) {
+          setStatus('Please enter or speak a question first');
+          return;
+        }
+
+        setStatus('Sending to AI...');
+        const astronautId = astronautSelect.value || 'AST-001';
+
+        try {
+          const response = await fetch('/api/v1/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              astronaut_id: astronautId,
+              question,
+              include_context: true,
+              ml_context: astronautId === 'AST-001' ? {
+                astronaut_id: 'AST-001',
+                metric: 'heart_rate',
+                current_value: 110,
+                baseline_value: 72,
+                unit: 'bpm',
+                anomaly_detected: true,
+                trend: 'increasing',
+                sensor_quality: 'good',
+                data_source: 'simulated'
+              } : null
+            })
+          });
+
+          const data = await response.json();
+          if (!response.ok) {
+            throw new Error(data.detail || 'Request failed');
+          }
+          lastAnswer = data.answer || 'No answer available.';
+          setStatus('AI response received');
+          questionBox.value = lastAnswer;
+        } catch (error) {
+          setStatus(error.message || 'AI request failed');
+        }
+      });
+
+      speakButton.addEventListener('click', () => {
+        if (!('speechSynthesis' in window)) {
+          setStatus('This browser does not support speech synthesis');
+          return;
+        }
+
+        const text = lastAnswer || questionBox.value.trim();
+        if (!text) {
+          setStatus('No answer to read aloud');
+          return;
+        }
+
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'en-US';
+        window.speechSynthesis.cancel();
+        window.speechSynthesis.speak(utterance);
+        setStatus('Speaking answer...');
+      });
+    </script>
+  </body>
+</html>

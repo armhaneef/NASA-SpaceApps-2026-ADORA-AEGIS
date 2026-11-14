@@ -1,0 +1,1107 @@
+{
+  "astronaut_id": "SYNTHETIC-ASTRONAUT-001",
+  "timestamp": "2026-01-01T01:40:00+00:00",
+  "data_source": "synthetic_example",
+  "heart_rate": {
+    "value": 72,
+    "unit": "beats/min"
+  },
+  "spo2": {
+    "value": 98,
+    "unit": "%"
+  },
+  "temperature": {
+    "value": 33,
+    "unit": "degC"
+  },
+  "history": [
+    {
+      "astronaut_id": "SYNTHETIC-ASTRONAUT-001",
+      "timestamp": "2026-01-01T00:00:00+00:00",
+      "data_source": "synthetic_example",
+      "heart_rate": {
+        "value": 70.0,
+        "unit": "beats/min"
+      },
+      "spo2": {
+        "value": 97.7,
+        "unit": "%"
+      },
+      "temperature": {
+        "value": 32.82,
+        "unit": "degC"
+      }
+    },
+    {
+      "astronaut_id": "SYNTHETIC-ASTRONAUT-001",
+      "timestamp": "2026-01-01T00:01:00+00:00",
+      "data_source": "synthetic_example",
+      "heart_rate": {
+        "value": 72.8,
+        "unit": "beats/min"
+      },
+      "spo2": {
+        "value": 98.0,
+        "unit": "%"
+      },
+      "temperature": {
+        "value": 32.97,
+        "unit": "degC"
+      }
+    },
+    {
+      "astronaut_id": "SYNTHETIC-ASTRONAUT-001",
+      "timestamp": "2026-01-01T00:02:00+00:00",
+      "data_source": "synthetic_example",
+      "heart_rate": {
+        "value": 71.2,
+        "unit": "beats/min"
+      },
+      "spo2": {
+        "value": 98.3,
+        "unit": "%"
+      },
+      "temperature": {
+        "value": 33.12,
+        "unit": "degC"
+      }
+    },
+    {
+      "astronaut_id": "SYNTHETIC-ASTRONAUT-001",
+      "timestamp": "2026-01-01T00:03:00+00:00",
+      "data_source": "synthetic_example",
+      "heart_rate": {
+        "value": 74.0,
+        "unit": "beats/min"
+      },
+      "spo2": {
+        "value": 97.9,
+        "unit": "%"
+      },
+      "temperature": {
+        "value": 32.88,
+        "unit": "degC"
+      }
+    },
+    {
+      "astronaut_id": "SYNTHETIC-ASTRONAUT-001",
+      "timestamp": "2026-01-01T00:04:00+00:00",
+      "data_source": "synthetic_example",
+      "heart_rate": {
+        "value": 72.4,
+        "unit": "beats/min"
+      },
+      "spo2": {
+        "value": 98.2,
+        "unit": "%"
+      },
+      "temperature": {
+        "value": 33.03,
+        "unit": "degC"
+      }
+    },
+    {
+      "astronaut_id": "SYNTHETIC-ASTRONAUT-001",
+      "timestamp": "2026-01-01T00:05:00+00:00",
+      "data_source": "synthetic_example",
+      "heart_rate": {
+        "value": 70.8,
+        "unit": "beats/min"
+      },
+      "spo2": {
+        "value": 97.8,
+        "unit": "%"
+      },
+      "temperature": {
+        "value": 33.18,
+        "unit": "degC"
+      }
+    },
+    {
+      "astronaut_id": "SYNTHETIC-ASTRONAUT-001",
+      "timestamp": "2026-01-01T00:06:00+00:00",
+      "data_source": "synthetic_example",
+      "heart_rate": {
+        "value": 73.6,
+        "unit": "beats/min"
+      },
+      "spo2": {
+        "value": 98.1,
+        "unit": "%"
+      },
+      "temperature": {
+        "value": 32.94,
+        "unit": "degC"
+      }
+    },
+    {
+      "astronaut_id": "SYNTHETIC-ASTRONAUT-001",
+      "timestamp": "2026-01-01T00:07:00+00:00",
+      "data_source": "synthetic_example",
+      "heart_rate": {
+        "value": 72.0,
+        "unit": "beats/min"
+      },
+      "spo2": {
+        "value": 97.7,
+        "unit": "%"
+      },
+      "temperature": {
+        "value": 33.09,
+        "unit": "degC"
+      }
+    },
+    {
+      "astronaut_id": "SYNTHETIC-ASTRONAUT-001",
+      "timestamp": "2026-01-01T00:08:00+00:00",
+      "data_source": "synthetic_example",
+      "heart_rate": {
+        "value": 70.4,
+        "unit": "beats/min"
+      },
+      "spo2": {
+        "value": 98.0,
+        "unit": "%"
+      },
+      "temperature": {
+        "value": 32.85,
+        "unit": "degC"
+      }
+    },
+    {
+      "astronaut_id": "SYNTHETIC-ASTRONAUT-001",
+      "timestamp": "2026-01-01T00:09:00+00:00",
+      "data_source": "synthetic_example",
+      "heart_rate": {
+        "value": 73.2,
+        "unit": "beats/min"
+      },
+      "spo2": {
+        "value": 98.3,
+        "unit": "%"
+      },
+      "temperature": {
+        "value": 33.0,
+        "unit": "degC"
+      }
+    },
+    {
+      "astronaut_id": "SYNTHETIC-ASTRONAUT-001",
+      "timestamp": "2026-01-01T00:10:00+00:00",
+      "data_source": "synthetic_example",
+      "heart_rate": {
+        "value": 71.6,
+        "unit": "beats/min"
+      },
+      "spo2": {
+        "value": 97.9,
+        "unit": "%"
+      },
+      "temperature": {
+        "value": 33.15,
+        "unit": "degC"
+      }
+    },
+    {
+      "astronaut_id": "SYNTHETIC-ASTRONAUT-001",
+      "timestamp": "2026-01-01T00:11:00+00:00",
+      "data_source": "synthetic_example",
+      "heart_rate": {
+        "value": 70.0,
+        "unit": "beats/min"
+      },
+      "spo2": {
+        "value": 98.2,
+        "unit": "%"
+      },
+      "temperature": {
+        "value": 32.91,
+        "unit": "degC"
+      }
+    },
+    {
+      "astronaut_id": "SYNTHETIC-ASTRONAUT-001",
+      "timestamp": "2026-01-01T00:12:00+00:00",
+      "data_source": "synthetic_example",
+      "heart_rate": {
+        "value": 72.8,
+        "unit": "beats/min"
+      },
+      "spo2": {
+        "value": 97.8,
+        "unit": "%"
+      },
+      "temperature": {
+        "value": 33.06,
+        "unit": "degC"
+      }
+    },
+    {
+      "astronaut_id": "SYNTHETIC-ASTRONAUT-001",
+      "timestamp": "2026-01-01T00:13:00+00:00",
+      "data_source": "synthetic_example",
+      "heart_rate": {
+        "value": 71.2,
+        "unit": "beats/min"
+      },
+      "spo2": {
+        "value": 98.1,
+        "unit": "%"
+      },
+      "temperature": {
+        "value": 32.82,
+        "unit": "degC"
+      }
+    },
+    {
+      "astronaut_id": "SYNTHETIC-ASTRONAUT-001",
+      "timestamp": "2026-01-01T00:14:00+00:00",
+      "data_source": "synthetic_example",
+      "heart_rate": {
+        "value": 74.0,
+        "unit": "beats/min"
+      },
+      "spo2": {
+        "value": 97.7,
+        "unit": "%"
+      },
+      "temperature": {
+        "value": 32.97,
+        "unit": "degC"
+      }
+    },
+    {
+      "astronaut_id": "SYNTHETIC-ASTRONAUT-001",
+      "timestamp": "2026-01-01T00:15:00+00:00",
+      "data_source": "synthetic_example",
+      "heart_rate": {
+        "value": 72.4,
+        "unit": "beats/min"
+      },
+      "spo2": {
+        "value": 98.0,
+        "unit": "%"
+      },
+      "temperature": {
+        "value": 33.12,
+        "unit": "degC"
+      }
+    },
+    {
+      "astronaut_id": "SYNTHETIC-ASTRONAUT-001",
+      "timestamp": "2026-01-01T00:16:00+00:00",
+      "data_source": "synthetic_example",
+      "heart_rate": {
+        "value": 70.8,
+        "unit": "beats/min"
+      },
+      "spo2": {
+        "value": 98.3,
+        "unit": "%"
+      },
+      "temperature": {
+        "value": 32.88,
+        "unit": "degC"
+      }
+    },
+    {
+      "astronaut_id": "SYNTHETIC-ASTRONAUT-001",
+      "timestamp": "2026-01-01T00:17:00+00:00",
+      "data_source": "synthetic_example",
+      "heart_rate": {
+        "value": 73.6,
+        "unit": "beats/min"
+      },
+      "spo2": {
+        "value": 97.9,
+        "unit": "%"
+      },
+      "temperature": {
+        "value": 33.03,
+        "unit": "degC"
+      }
+    },
+    {
+      "astronaut_id": "SYNTHETIC-ASTRONAUT-001",
+      "timestamp": "2026-01-01T00:18:00+00:00",
+      "data_source": "synthetic_example",
+      "heart_rate": {
+        "value": 72.0,
+        "unit": "beats/min"
+      },
+      "spo2": {
+        "value": 98.2,
+        "unit": "%"
+      },
+      "temperature": {
+        "value": 33.18,
+        "unit": "degC"
+      }
+    },
+    {
+      "astronaut_id": "SYNTHETIC-ASTRONAUT-001",
+      "timestamp": "2026-01-01T00:19:00+00:00",
+      "data_source": "synthetic_example",
+      "heart_rate": {
+        "value": 70.4,
+        "unit": "beats/min"
+      },
+      "spo2": {
+        "value": 97.8,
+        "unit": "%"
+      },
+      "temperature": {
+        "value": 32.94,
+        "unit": "degC"
+      }
+    },
+    {
+      "astronaut_id": "SYNTHETIC-ASTRONAUT-001",
+      "timestamp": "2026-01-01T00:20:00+00:00",
+      "data_source": "synthetic_example",
+      "heart_rate": {
+        "value": 73.2,
+        "unit": "beats/min"
+      },
+      "spo2": {
+        "value": 98.1,
+        "unit": "%"
+      },
+      "temperature": {
+        "value": 33.09,
+        "unit": "degC"
+      }
+    },
+    {
+      "astronaut_id": "SYNTHETIC-ASTRONAUT-001",
+      "timestamp": "2026-01-01T00:21:00+00:00",
+      "data_source": "synthetic_example",
+      "heart_rate": {
+        "value": 71.6,
+        "unit": "beats/min"
+      },
+      "spo2": {
+        "value": 97.7,
+        "unit": "%"
+      },
+      "temperature": {
+        "value": 32.85,
+        "unit": "degC"
+      }
+    },
+    {
+      "astronaut_id": "SYNTHETIC-ASTRONAUT-001",
+      "timestamp": "2026-01-01T00:22:00+00:00",
+      "data_source": "synthetic_example",
+      "heart_rate": {
+        "value": 70.0,
+        "unit": "beats/min"
+      },
+      "spo2": {
+        "value": 98.0,
+        "unit": "%"
+      },
+      "temperature": {
+        "value": 33.0,
+        "unit": "degC"
+      }
+    },
+    {
+      "astronaut_id": "SYNTHETIC-ASTRONAUT-001",
+      "timestamp": "2026-01-01T00:23:00+00:00",
+      "data_source": "synthetic_example",
+      "heart_rate": {
+        "value": 72.8,
+        "unit": "beats/min"
+      },
+      "spo2": {
+        "value": 98.3,
+        "unit": "%"
+      },
+      "temperature": {
+        "value": 33.15,
+        "unit": "degC"
+      }
+    },
+    {
+      "astronaut_id": "SYNTHETIC-ASTRONAUT-001",
+      "timestamp": "2026-01-01T00:24:00+00:00",
+      "data_source": "synthetic_example",
+      "heart_rate": {
+        "value": 71.2,
+        "unit": "beats/min"
+      },
+      "spo2": {
+        "value": 97.9,
+        "unit": "%"
+      },
+      "temperature": {
+        "value": 32.91,
+        "unit": "degC"
+      }
+    },
+    {
+      "astronaut_id": "SYNTHETIC-ASTRONAUT-001",
+      "timestamp": "2026-01-01T00:25:00+00:00",
+      "data_source": "synthetic_example",
+      "heart_rate": {
+        "value": 74.0,
+        "unit": "beats/min"
+      },
+      "spo2": {
+        "value": 98.2,
+        "unit": "%"
+      },
+      "temperature": {
+        "value": 33.06,
+        "unit": "degC"
+      }
+    },
+    {
+      "astronaut_id": "SYNTHETIC-ASTRONAUT-001",
+      "timestamp": "2026-01-01T00:26:00+00:00",
+      "data_source": "synthetic_example",
+      "heart_rate": {
+        "value": 72.4,
+        "unit": "beats/min"
+      },
+      "spo2": {
+        "value": 97.8,
+        "unit": "%"
+      },
+      "temperature": {
+        "value": 32.82,
+        "unit": "degC"
+      }
+    },
+    {
+      "astronaut_id": "SYNTHETIC-ASTRONAUT-001",
+      "timestamp": "2026-01-01T00:27:00+00:00",
+      "data_source": "synthetic_example",
+      "heart_rate": {
+        "value": 70.8,
+        "unit": "beats/min"
+      },
+      "spo2": {
+        "value": 98.1,
+        "unit": "%"
+      },
+      "temperature": {
+        "value": 32.97,
+        "unit": "degC"
+      }
+    },
+    {
+      "astronaut_id": "SYNTHETIC-ASTRONAUT-001",
+      "timestamp": "2026-01-01T00:28:00+00:00",
+      "data_source": "synthetic_example",
+      "heart_rate": {
+        "value": 73.6,
+        "unit": "beats/min"
+      },
+      "spo2": {
+        "value": 97.7,
+        "unit": "%"
+      },
+      "temperature": {
+        "value": 33.12,
+        "unit": "degC"
+      }
+    },
+    {
+      "astronaut_id": "SYNTHETIC-ASTRONAUT-001",
+      "timestamp": "2026-01-01T00:29:00+00:00",
+      "data_source": "synthetic_example",
+      "heart_rate": {
+        "value": 72.0,
+        "unit": "beats/min"
+      },
+      "spo2": {
+        "value": 98.0,
+        "unit": "%"
+      },
+      "temperature": {
+        "value": 32.88,
+        "unit": "degC"
+      }
+    },
+    {
+      "astronaut_id": "SYNTHETIC-ASTRONAUT-001",
+      "timestamp": "2026-01-01T00:30:00+00:00",
+      "data_source": "synthetic_example",
+      "heart_rate": {
+        "value": 70.4,
+        "unit": "beats/min"
+      },
+      "spo2": {
+        "value": 98.3,
+        "unit": "%"
+      },
+      "temperature": {
+        "value": 33.03,
+        "unit": "degC"
+      }
+    },
+    {
+      "astronaut_id": "SYNTHETIC-ASTRONAUT-001",
+      "timestamp": "2026-01-01T00:31:00+00:00",
+      "data_source": "synthetic_example",
+      "heart_rate": {
+        "value": 73.2,
+        "unit": "beats/min"
+      },
+      "spo2": {
+        "value": 97.9,
+        "unit": "%"
+      },
+      "temperature": {
+        "value": 33.18,
+        "unit": "degC"
+      }
+    },
+    {
+      "astronaut_id": "SYNTHETIC-ASTRONAUT-001",
+      "timestamp": "2026-01-01T00:32:00+00:00",
+      "data_source": "synthetic_example",
+      "heart_rate": {
+        "value": 71.6,
+        "unit": "beats/min"
+      },
+      "spo2": {
+        "value": 98.2,
+        "unit": "%"
+      },
+      "temperature": {
+        "value": 32.94,
+        "unit": "degC"
+      }
+    },
+    {
+      "astronaut_id": "SYNTHETIC-ASTRONAUT-001",
+      "timestamp": "2026-01-01T00:33:00+00:00",
+      "data_source": "synthetic_example",
+      "heart_rate": {
+        "value": 70.0,
+        "unit": "beats/min"
+      },
+      "spo2": {
+        "value": 97.8,
+        "unit": "%"
+      },
+      "temperature": {
+        "value": 33.09,
+        "unit": "degC"
+      }
+    },
+    {
+      "astronaut_id": "SYNTHETIC-ASTRONAUT-001",
+      "timestamp": "2026-01-01T00:34:00+00:00",
+      "data_source": "synthetic_example",
+      "heart_rate": {
+        "value": 72.8,
+        "unit": "beats/min"
+      },
+      "spo2": {
+        "value": 98.1,
+        "unit": "%"
+      },
+      "temperature": {
+        "value": 32.85,
+        "unit": "degC"
+      }
+    },
+    {
+      "astronaut_id": "SYNTHETIC-ASTRONAUT-001",
+      "timestamp": "2026-01-01T00:35:00+00:00",
+      "data_source": "synthetic_example",
+      "heart_rate": {
+        "value": 71.2,
+        "unit": "beats/min"
+      },
+      "spo2": {
+        "value": 97.7,
+        "unit": "%"
+      },
+      "temperature": {
+        "value": 33.0,
+        "unit": "degC"
+      }
+    },
+    {
+      "astronaut_id": "SYNTHETIC-ASTRONAUT-001",
+      "timestamp": "2026-01-01T00:36:00+00:00",
+      "data_source": "synthetic_example",
+      "heart_rate": {
+        "value": 74.0,
+        "unit": "beats/min"
+      },
+      "spo2": {
+        "value": 98.0,
+        "unit": "%"
+      },
+      "temperature": {
+        "value": 33.15,
+        "unit": "degC"
+      }
+    },
+    {
+      "astronaut_id": "SYNTHETIC-ASTRONAUT-001",
+      "timestamp": "2026-01-01T00:37:00+00:00",
+      "data_source": "synthetic_example",
+      "heart_rate": {
+        "value": 72.4,
+        "unit": "beats/min"
+      },
+      "spo2": {
+        "value": 98.3,
+        "unit": "%"
+      },
+      "temperature": {
+        "value": 32.91,
+        "unit": "degC"
+      }
+    },
+    {
+      "astronaut_id": "SYNTHETIC-ASTRONAUT-001",
+      "timestamp": "2026-01-01T00:38:00+00:00",
+      "data_source": "synthetic_example",
+      "heart_rate": {
+        "value": 70.8,
+        "unit": "beats/min"
+      },
+      "spo2": {
+        "value": 97.9,
+        "unit": "%"
+      },
+      "temperature": {
+        "value": 33.06,
+        "unit": "degC"
+      }
+    },
+    {
+      "astronaut_id": "SYNTHETIC-ASTRONAUT-001",
+      "timestamp": "2026-01-01T00:39:00+00:00",
+      "data_source": "synthetic_example",
+      "heart_rate": {
+        "value": 73.6,
+        "unit": "beats/min"
+      },
+      "spo2": {
+        "value": 98.2,
+        "unit": "%"
+      },
+      "temperature": {
+        "value": 32.82,
+        "unit": "degC"
+      }
+    },
+    {
+      "astronaut_id": "SYNTHETIC-ASTRONAUT-001",
+      "timestamp": "2026-01-01T00:40:00+00:00",
+      "data_source": "synthetic_example",
+      "heart_rate": {
+        "value": 72.0,
+        "unit": "beats/min"
+      },
+      "spo2": {
+        "value": 97.8,
+        "unit": "%"
+      },
+      "temperature": {
+        "value": 32.97,
+        "unit": "degC"
+      }
+    },
+    {
+      "astronaut_id": "SYNTHETIC-ASTRONAUT-001",
+      "timestamp": "2026-01-01T00:41:00+00:00",
+      "data_source": "synthetic_example",
+      "heart_rate": {
+        "value": 70.4,
+        "unit": "beats/min"
+      },
+      "spo2": {
+        "value": 98.1,
+        "unit": "%"
+      },
+      "temperature": {
+        "value": 33.12,
+        "unit": "degC"
+      }
+    },
+    {
+      "astronaut_id": "SYNTHETIC-ASTRONAUT-001",
+      "timestamp": "2026-01-01T00:42:00+00:00",
+      "data_source": "synthetic_example",
+      "heart_rate": {
+        "value": 73.2,
+        "unit": "beats/min"
+      },
+      "spo2": {
+        "value": 97.7,
+        "unit": "%"
+      },
+      "temperature": {
+        "value": 32.88,
+        "unit": "degC"
+      }
+    },
+    {
+      "astronaut_id": "SYNTHETIC-ASTRONAUT-001",
+      "timestamp": "2026-01-01T00:43:00+00:00",
+      "data_source": "synthetic_example",
+      "heart_rate": {
+        "value": 71.6,
+        "unit": "beats/min"
+      },
+      "spo2": {
+        "value": 98.0,
+        "unit": "%"
+      },
+      "temperature": {
+        "value": 33.03,
+        "unit": "degC"
+      }
+    },
+    {
+      "astronaut_id": "SYNTHETIC-ASTRONAUT-001",
+      "timestamp": "2026-01-01T00:44:00+00:00",
+      "data_source": "synthetic_example",
+      "heart_rate": {
+        "value": 70.0,
+        "unit": "beats/min"
+      },
+      "spo2": {
+        "value": 98.3,
+        "unit": "%"
+      },
+      "temperature": {
+        "value": 33.18,
+        "unit": "degC"
+      }
+    },
+    {
+      "astronaut_id": "SYNTHETIC-ASTRONAUT-001",
+      "timestamp": "2026-01-01T00:45:00+00:00",
+      "data_source": "synthetic_example",
+      "heart_rate": {
+        "value": 72.8,
+        "unit": "beats/min"
+      },
+      "spo2": {
+        "value": 97.9,
+        "unit": "%"
+      },
+      "temperature": {
+        "value": 32.94,
+        "unit": "degC"
+      }
+    },
+    {
+      "astronaut_id": "SYNTHETIC-ASTRONAUT-001",
+      "timestamp": "2026-01-01T00:46:00+00:00",
+      "data_source": "synthetic_example",
+      "heart_rate": {
+        "value": 71.2,
+        "unit": "beats/min"
+      },
+      "spo2": {
+        "value": 98.2,
+        "unit": "%"
+      },
+      "temperature": {
+        "value": 33.09,
+        "unit": "degC"
+      }
+    },
+    {
+      "astronaut_id": "SYNTHETIC-ASTRONAUT-001",
+      "timestamp": "2026-01-01T00:47:00+00:00",
+      "data_source": "synthetic_example",
+      "heart_rate": {
+        "value": 74.0,
+        "unit": "beats/min"
+      },
+      "spo2": {
+        "value": 97.8,
+        "unit": "%"
+      },
+      "temperature": {
+        "value": 32.85,
+        "unit": "degC"
+      }
+    },
+    {
+      "astronaut_id": "SYNTHETIC-ASTRONAUT-001",
+      "timestamp": "2026-01-01T00:48:00+00:00",
+      "data_source": "synthetic_example",
+      "heart_rate": {
+        "value": 72.4,
+        "unit": "beats/min"
+      },
+      "spo2": {
+        "value": 98.1,
+        "unit": "%"
+      },
+      "temperature": {
+        "value": 33.0,
+        "unit": "degC"
+      }
+    },
+    {
+      "astronaut_id": "SYNTHETIC-ASTRONAUT-001",
+      "timestamp": "2026-01-01T00:49:00+00:00",
+      "data_source": "synthetic_example",
+      "heart_rate": {
+        "value": 70.8,
+        "unit": "beats/min"
+      },
+      "spo2": {
+        "value": 97.7,
+        "unit": "%"
+      },
+      "temperature": {
+        "value": 33.15,
+        "unit": "degC"
+      }
+    },
+    {
+      "astronaut_id": "SYNTHETIC-ASTRONAUT-001",
+      "timestamp": "2026-01-01T00:50:00+00:00",
+      "data_source": "synthetic_example",
+      "heart_rate": {
+        "value": 73.6,
+        "unit": "beats/min"
+      },
+      "spo2": {
+        "value": 98.0,
+        "unit": "%"
+      },
+      "temperature": {
+        "value": 32.91,
+        "unit": "degC"
+      }
+    },
+    {
+      "astronaut_id": "SYNTHETIC-ASTRONAUT-001",
+      "timestamp": "2026-01-01T00:51:00+00:00",
+      "data_source": "synthetic_example",
+      "heart_rate": {
+        "value": 72.0,
+        "unit": "beats/min"
+      },
+      "spo2": {
+        "value": 98.3,
+        "unit": "%"
+      },
+      "temperature": {
+        "value": 33.06,
+        "unit": "degC"
+      }
+    },
+    {
+      "astronaut_id": "SYNTHETIC-ASTRONAUT-001",
+      "timestamp": "2026-01-01T00:52:00+00:00",
+      "data_source": "synthetic_example",
+      "heart_rate": {
+        "value": 70.4,
+        "unit": "beats/min"
+      },
+      "spo2": {
+        "value": 97.9,
+        "unit": "%"
+      },
+      "temperature": {
+        "value": 32.82,
+        "unit": "degC"
+      }
+    },
+    {
+      "astronaut_id": "SYNTHETIC-ASTRONAUT-001",
+      "timestamp": "2026-01-01T00:53:00+00:00",
+      "data_source": "synthetic_example",
+      "heart_rate": {
+        "value": 73.2,
+        "unit": "beats/min"
+      },
+      "spo2": {
+        "value": 98.2,
+        "unit": "%"
+      },
+      "temperature": {
+        "value": 32.97,
+        "unit": "degC"
+      }
+    },
+    {
+      "astronaut_id": "SYNTHETIC-ASTRONAUT-001",
+      "timestamp": "2026-01-01T00:54:00+00:00",
+      "data_source": "synthetic_example",
+      "heart_rate": {
+        "value": 71.6,
+        "unit": "beats/min"
+      },
+      "spo2": {
+        "value": 97.8,
+        "unit": "%"
+      },
+      "temperature": {
+        "value": 33.12,
+        "unit": "degC"
+      }
+    },
+    {
+      "astronaut_id": "SYNTHETIC-ASTRONAUT-001",
+      "timestamp": "2026-01-01T00:55:00+00:00",
+      "data_source": "synthetic_example",
+      "heart_rate": {
+        "value": 70.0,
+        "unit": "beats/min"
+      },
+      "spo2": {
+        "value": 98.1,
+        "unit": "%"
+      },
+      "temperature": {
+        "value": 32.88,
+        "unit": "degC"
+      }
+    },
+    {
+      "astronaut_id": "SYNTHETIC-ASTRONAUT-001",
+      "timestamp": "2026-01-01T00:56:00+00:00",
+      "data_source": "synthetic_example",
+      "heart_rate": {
+        "value": 72.8,
+        "unit": "beats/min"
+      },
+      "spo2": {
+        "value": 97.7,
+        "unit": "%"
+      },
+      "temperature": {
+        "value": 33.03,
+        "unit": "degC"
+      }
+    },
+    {
+      "astronaut_id": "SYNTHETIC-ASTRONAUT-001",
+      "timestamp": "2026-01-01T00:57:00+00:00",
+      "data_source": "synthetic_example",
+      "heart_rate": {
+        "value": 71.2,
+        "unit": "beats/min"
+      },
+      "spo2": {
+        "value": 98.0,
+        "unit": "%"
+      },
+      "temperature": {
+        "value": 33.18,
+        "unit": "degC"
+      }
+    },
+    {
+      "astronaut_id": "SYNTHETIC-ASTRONAUT-001",
+      "timestamp": "2026-01-01T00:58:00+00:00",
+      "data_source": "synthetic_example",
+      "heart_rate": {
+        "value": 74.0,
+        "unit": "beats/min"
+      },
+      "spo2": {
+        "value": 98.3,
+        "unit": "%"
+      },
+      "temperature": {
+        "value": 32.94,
+        "unit": "degC"
+      }
+    },
+    {
+      "astronaut_id": "SYNTHETIC-ASTRONAUT-001",
+      "timestamp": "2026-01-01T00:59:00+00:00",
+      "data_source": "synthetic_example",
+      "heart_rate": {
+        "value": 72.4,
+        "unit": "beats/min"
+      },
+      "spo2": {
+        "value": 97.9,
+        "unit": "%"
+      },
+      "temperature": {
+        "value": 33.09,
+        "unit": "degC"
+      }
+    },
+    {
+      "astronaut_id": "SYNTHETIC-ASTRONAUT-001",
+      "timestamp": "2026-01-01T01:00:00+00:00",
+      "data_source": "synthetic_example",
+      "heart_rate": {
+        "value": 70.8,
+        "unit": "beats/min"
+      },
+      "spo2": {
+        "value": 98.2,
+        "unit": "%"
+      },
+      "temperature": {
+        "value": 32.85,
+        "unit": "degC"
+      }
+    },
+    {
+      "astronaut_id": "SYNTHETIC-ASTRONAUT-001",
+      "timestamp": "2026-01-01T01:01:00+00:00",
+      "data_source": "synthetic_example",
+      "heart_rate": {
+        "value": 73.6,
+        "unit": "beats/min"
+      },
+      "spo2": {
+        "value": 97.8,
+        "unit": "%"
+      },
+      "temperature": {
+        "value": 33.0,
+        "unit": "degC"
+      }
+    },
+    {
+      "astronaut_id": "SYNTHETIC-ASTRONAUT-001",
+      "timestamp": "2026-01-01T01:02:00+00:00",
+      "data_source": "synthetic_example",
+      "heart_rate": {
+        "value": 72.0,
+        "unit": "beats/min"
+      },
+      "spo2": {
+        "value": 98.1,
+        "unit": "%"
+      },
+      "temperature": {
+        "value": 33.15,
+        "unit": "degC"
+      }
+    },
+    {
+      "astronaut_id": "SYNTHETIC-ASTRONAUT-001",
+      "timestamp": "2026-01-01T01:03:00+00:00",
+      "data_source": "synthetic_example",
+      "heart_rate": {
+        "value": 70.4,
+        "unit": "beats/min"
+      },
+      "spo2": {
+        "value": 97.7,
+        "unit": "%"
+      },
+      "temperature": {
+        "value": 32.91,
+        "unit": "degC"
+      }
+    }
+  ]
+}
