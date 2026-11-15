@@ -23,9 +23,11 @@ The repository currently has two distinct examples:
 
 - The nested `data/synthetic/sample_reading.json` contains synthetic HR, SpO2,
   temperature, respiration rate, CO2, and `data_source`.
-- The generated CSV and latest JSON contain `AST-001`, UTC timestamps,
-  synthetic HR, SpO2, temperature, respiration rate, and a `scenario` value.
-  The generator uses a fixed UTC start and configurable seed.
+- The generated CSV and latest JSON contain `AST-001` (or a configured
+  synthetic identifier), UTC timestamps, synthetic HR, SpO2, the legacy
+  `body_temperature_c` field, a separate `skin_temperature_c` feature,
+  respiration rate, and a `scenario` value. The generator uses a fixed UTC
+  start and configurable seed.
 
 These are not interchangeable schemas. The generated CSV does not include
 CO2 or the sample JSON's `data_source`; neither generator output consistently
@@ -37,6 +39,20 @@ and respiration rate), not blood pressure. If a local or older mock UI shows
 a blood-pressure value, it is a presentation-only fixture and not a backend
 measurement. The generator's scenario labels and bounds are demo controls,
 not clinical classes or approved thresholds.
+
+The new `skin_temperature_c` feature is independent of the legacy
+`body_temperature_c` field and generated from its own seeded random stream. It
+uses one fixed profile across all `normal`, `warning`, and `critical` vital
+scenarios, so the feature is not being used to label those scenarios. The
+profile is a software-integration fixture, loosely centered on a published
+consumer wrist-wearable cohort mean; its spread and bounds are engineering
+choices, not astronaut data or clinical limits. See [the data schema](./data-schema.md)
+and [Dunn et al. (2021)](https://doi.org/10.1038/s41591-021-01339-0).
+
+The backend adapter omits `body_temperature_c` and maps only the separately
+named `skin_temperature_c` to `skin_temperature`. ML consumes that explicit
+measurement as its `temperature` feature; the stored measurement name and
+legacy field are not changed or inferred.
 
 ## Recommended scientific safeguards
 

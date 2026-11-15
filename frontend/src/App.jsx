@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
 import { OrbitControls, Sparkles } from '@react-three/drei'
 import * as THREE from 'three'
 import AnatomyModel from './AnatomyModel.jsx'
+import { getLocalizedFindings, getSelectionStatus, ORGAN_STRUCTURES } from './anatomyRegions.js'
+import { getFocusDistance, getLayerAlertIndicators } from './anatomyScene.js'
 import {
   createDemoSnapshot,
   DEMO_SCENARIOS,
@@ -42,6 +44,21 @@ import {
   XAxis,
 } from 'recharts'
 import './App.css'
+import {
+  getAnalysisFindings,
+  getAnalysisStatusLabel,
+  getAnalysisStatusTone,
+} from './analysisPresentation.js'
+import usePrefersReducedMotion from './usePrefersReducedMotion.js'
+import {
+  apiBaseUrl,
+  askForExplanation,
+  askAssistantQuestion,
+  fetchLiveDashboard,
+  fetchSyntheticAstronauts,
+  isApiRequestCancelled,
+  runLocalAnalysis,
+} from './api.js'
 
 const REGIONS = {
   head: {
@@ -61,7 +78,7 @@ const REGIONS = {
       'The brain meshes are shown for education only. This prototype does not measure brain activity or provide a neurological assessment.',
   },
   heart: {
-    name: 'Cardiovascular',
+    name: 'Heart',
     shortName: 'HEART',
     code: 'ANATOMY-02',
     description: 'Educational heart view with general simulated vital-sign context.',
@@ -120,12 +137,15 @@ const REGIONS = {
     description: 'Grouped right-side leg structures identified by their mesh names.',
     explanation: 'The selected leg meshes are anatomical context only. No leg-specific health measurements are available in this prototype.',
   },
+  ...ORGAN_STRUCTURES,
 }
 
 const METRIC_DEFINITIONS = [
   {
     name: 'Heart rate',
+    shortName: 'Heart rate',
     readingKey: 'heart_rate_bpm',
+    alertKey: 'heart_rate_bpm',
     unit: 'bpm',
     baseline: HEALTH_BASELINE.heart_rate_bpm,
     icon: Heart,
@@ -134,7 +154,9 @@ const METRIC_DEFINITIONS = [
   },
   {
     name: 'Oxygen saturation',
+    shortName: 'SpO₂',
     readingKey: 'spo2_percent',
+    alertKey: 'spo2_percent',
     unit: '%',
     baseline: HEALTH_BASELINE.spo2_percent,
     icon: Activity,
@@ -143,6 +165,7 @@ const METRIC_DEFINITIONS = [
   },
   {
     name: 'Body temperature',
+    shortName: 'Temp.',
     readingKey: 'body_temperature_c',
     unit: '°C',
     baseline: HEALTH_BASELINE.body_temperature_c,
@@ -152,7 +175,9 @@ const METRIC_DEFINITIONS = [
   },
   {
     name: 'Respiration',
+    shortName: 'Resp.',
     readingKey: 'respiration_rate_bpm',
+    alertKey: 'respiration_rate_bpm',
     unit: '/min',
     baseline: HEALTH_BASELINE.respiration_rate_bpm,
     icon: Wind,
@@ -169,30 +194,36 @@ const THRESHOLD_FIELDS = [
   { key: 'respiration_rate_bpm', direction: 'low', label: 'Respiration · low Δ' },
 ]
 
-function getMetrics(readings, regionStatuses) {
+function getMetrics(readings, alerts, live = false) {
   return METRIC_DEFINITIONS.map((definition) => {
     const rawValue = readings[definition.readingKey]
-    const value = definition.unit === '°C' ? rawValue.toFixed(1) : String(Math.round(rawValue))
-    const difference = rawValue - definition.baseline
-    const change = definition.unit === '°C'
-      ? `${difference > 0 ? '+' : ''}${difference.toFixed(1)}`
-      : `${difference > 0 ? '+' : ''}${Math.round(difference)}`
+    const present = Number.isFinite(rawValue)
+    const value = !present
+      ? '—'
+      : definition.unit === '°C'
+        ? rawValue.toFixed(1)
+        : String(Math.round(rawValue))
+    const difference = present ? rawValue - definition.baseline : null
+    const change = !present || live
+      ? '—'
+      : definition.unit === '°C'
+        ? `${difference > 0 ? '+' : ''}${difference.toFixed(1)}`
+        : `${difference > 0 ? '+' : ''}${Math.round(difference)}`
 
     return {
       ...definition,
+      name: live && definition.readingKey === 'body_temperature_c' ? 'Skin temperature' : definition.name,
       value,
-      baselineLabel: `${definition.baseline}${definition.unit === '°C' ? ' °C' : ` ${definition.unit}`}`,
+      baselineLabel: live ? 'NOT PROVIDED' : `${definition.baseline}${definition.unit === '°C' ? ' °C' : ` ${definition.unit}`}`,
       change,
-      status: definition.readingKey === 'heart_rate_bpm'
-        ? regionStatuses.heart
-        : definition.readingKey === 'spo2_percent' || definition.readingKey === 'respiration_rate_bpm'
-          ? regionStatuses.leftLung
-          : 'no-data',
+      status: live || !present || !definition.alertKey
+        ? 'no-data'
+        : alerts.find((alert) => alert.measurementKey === definition.alertKey)?.severity ?? 'normal',
     }
   })
 }
 
-function getHistory(readings) {
+function getDemoHistory(readings) {
   return Array.from({ length: 28 }, (_, index) => {
     const wave = (offset, magnitude, frequency) =>
       offset + Math.sin(index * frequency) * magnitude + Math.cos(index * 0.37) * magnitude * 0.28
@@ -207,9 +238,10 @@ function getHistory(readings) {
   })
 }
 
-function ProjectionPlatform() {
+function ProjectionPlatform({ animate }) {
   const rings = useRef([])
   useFrame(({ clock }) => {
+    if (!animate) return
     rings.current.forEach((ring, index) => {
       if (ring) ring.rotation.z = clock.elapsedTime * (index % 2 ? -0.08 : 0.08)
     })
@@ -269,7 +301,7 @@ function ScanBeam({ active }) {
         <meshBasicMaterial
           color="#76eaff"
           transparent
-          opacity={0.12}
+          opacity={0.07}
           side={2}
           depthWrite={false}
           blending={THREE.AdditiveBlending}
@@ -277,19 +309,26 @@ function ScanBeam({ active }) {
       </mesh>
       <mesh position={[0, 0, 0.01]}>
         <planeGeometry args={[3.5, 0.008]} />
-        <meshBasicMaterial color="#c0fbff" transparent opacity={0.62} side={2} />
+        <meshBasicMaterial color="#c0fbff" transparent opacity={0.38} side={2} />
       </mesh>
     </group>
   )
 }
 
-function CameraFocus({ controlsRef, selected, focusPoints }) {
+function CameraFocus({ controlsRef, selected, focusPoints, focusRadii, reducedMotion }) {
   const focusTarget = useRef(new THREE.Vector3(0, 0, 0))
   const previousSelection = useRef(selected)
   const transitionDistance = useRef(5.8)
   const isTransitioning = useRef(false)
 
-  useFrame((_, delta) => {
+  useEffect(() => {
+    const controls = controlsRef.current
+    const stopTransition = () => { isTransitioning.current = false }
+    controls?.addEventListener('start', stopTransition)
+    return () => controls?.removeEventListener('start', stopTransition)
+  }, [controlsRef])
+
+  useFrame(({ camera }, delta) => {
     const controls = controlsRef.current
     if (!controls) return
 
@@ -297,19 +336,8 @@ function CameraFocus({ controlsRef, selected, focusPoints }) {
       previousSelection.current = selected
       const point = focusPoints[selected]
       focusTarget.current.fromArray(point ?? [0, 0, 0])
-      const regionDistance = {
-        brain: 3.2,
-        head: 3.35,
-        heart: 3.35,
-        leftLung: 3.45,
-        rightLung: 3.45,
-        abdomen: 3.55,
-        leftArm: 3.65,
-        rightArm: 3.65,
-        leftLeg: 3.75,
-        rightLeg: 3.75,
-      }
-      transitionDistance.current = selected && point ? regionDistance[selected] ?? 3.5 : 5.8
+      transitionDistance.current = selected && point
+        ? getFocusDistance(focusRadii[selected], camera.aspect, camera.fov) : 5.8
       isTransitioning.current = true
     }
 
@@ -318,6 +346,16 @@ function CameraFocus({ controlsRef, selected, focusPoints }) {
     const smoothing = 1 - Math.exp(-delta * 2.8)
     const direction = controls.object.position.clone().sub(controls.target).normalize()
     if (direction.lengthSq() === 0) direction.set(0, 0, 1)
+
+    if (reducedMotion) {
+      controls.target.copy(focusTarget.current)
+      controls.object.position.copy(
+        controls.target.clone().addScaledVector(direction, transitionDistance.current),
+      )
+      controls.update()
+      isTransitioning.current = false
+      return
+    }
 
     controls.target.lerp(focusTarget.current, smoothing)
     const cameraPosition = controls.target
@@ -338,21 +376,29 @@ function CameraFocus({ controlsRef, selected, focusPoints }) {
 
 function DigitalHuman({
   mode,
+  layer,
   selected,
   scan,
   regionStatuses,
   controlsRef,
   focusPoints,
+  focusRadii,
   onSelect,
   onModelStatusChange,
   onModelInfo,
+  retryModelKey,
+  reducedMotion,
+  isDemo,
+  mobile,
 }) {
   return (
     <Canvas
+      frameloop={reducedMotion ? 'demand' : 'always'}
       camera={{ position: [0, 0.02, 5.8], fov: 40, near: 0.1, far: 100 }}
-      dpr={[1, 1.6]}
+      dpr={mobile ? 1 : [1, 1.5]}
       gl={{ antialias: true, alpha: true }}
       onPointerMissed={() => onSelect(null)}
+      aria-label="Interactive 3D anatomy. Use the region selector to navigate without a pointer."
     >
       <color attach="background" args={['#040b12']} />
       <fog attach="fog" args={['#040b12', 8, 17]} />
@@ -373,25 +419,29 @@ function DigitalHuman({
           blending={THREE.AdditiveBlending}
         />
       </mesh>
-      <Sparkles count={110} scale={[4.5, 5.2, 3.5]} size={2.2} speed={0.18} opacity={0.58} color="#85eaff" />
+      {!reducedMotion && <Sparkles count={42} scale={[4.5, 5.2, 3.5]} size={2} speed={0.12} opacity={0.42} color="#85eaff" />}
       <AnatomyModel
+        key={retryModelKey}
         mode={mode}
+        layer={layer}
         selected={selected}
         regionStatuses={regionStatuses}
         onSelect={onSelect}
         onStatusChange={onModelStatusChange}
         onModelInfo={onModelInfo}
+        reducedMotion={reducedMotion}
+        isDemo={isDemo}
       />
-      <ProjectionPlatform />
-      <ScanBeam active={scan} />
-      <CameraFocus controlsRef={controlsRef} selected={selected} focusPoints={focusPoints} />
+      <ProjectionPlatform animate={!reducedMotion} />
+      <ScanBeam active={scan && !reducedMotion} />
+      <CameraFocus controlsRef={controlsRef} selected={selected} focusPoints={focusPoints} focusRadii={focusRadii} reducedMotion={reducedMotion} />
       <OrbitControls
         ref={controlsRef}
         makeDefault
         enablePan
-        enableDamping
+        enableDamping={!reducedMotion}
         dampingFactor={0.08}
-        minDistance={1.7}
+        minDistance={0.85}
         maxDistance={9}
         minPolarAngle={Math.PI * 0.29}
         maxPolarAngle={Math.PI * 0.68}
@@ -401,29 +451,32 @@ function DigitalHuman({
   )
 }
 
-function MetricCard({ metric, index, active, onSelect }) {
+function MetricCard({ metric, index, active, onSelect, live }) {
   const Icon = metric.icon
   const positive = metric.change.startsWith('+')
 
   return (
     <button
+      type="button"
       className={`metric-readout ${active ? 'metric-active' : ''} metric-status-${metric.status}`}
       onClick={onSelect}
+      aria-pressed={active}
+      aria-label={`Show ${live ? 'synthetic API' : 'synthetic demo'} history for ${metric.name}`}
       style={{ '--metric-color': metric.color, '--stagger': `${index * 70}ms` }}
     >
       <div className="metric-topline">
         <span className="metric-icon"><Icon size={14} strokeWidth={1.7} /></span>
-        <span className="metric-name">{metric.name}</span>
-        <span className="metric-live"><i />SIM</span>
+        <span className="metric-name">{live && metric.readingKey === 'body_temperature_c' ? 'Skin temp' : metric.shortName}</span>
+        <span className="metric-live"><i />{live ? 'API' : 'SIM'}</span>
       </div>
       <div className="metric-number">
         <strong>{metric.value}</strong>
         <span>{metric.unit}</span>
       </div>
       <div className="metric-baseline">
-        <span>BASE {metric.baselineLabel}</span>
+        <span>{live ? 'BASELINE' : 'DEMO REF'} {metric.baselineLabel}</span>
         <span className={positive ? 'trend-up' : 'trend-down'}>
-          {positive ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
+          {metric.change !== '—' && (positive ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />)}
           {metric.change}
         </span>
       </div>
@@ -431,18 +484,18 @@ function MetricCard({ metric, index, active, onSelect }) {
   )
 }
 
-function EcgChart({ metric, history }) {
+function EcgChart({ metric, history, live }) {
   return (
     <div className="chart-frame">
       <div className="chart-heading">
         <div>
-          <span className="eyebrow">SIMULATED FEED</span>
+          <span className="eyebrow">{live ? 'BACKEND HISTORY' : 'SIMULATED FEED'}</span>
           <strong><Activity size={13} /> {metric.name.toUpperCase()}</strong>
         </div>
-        <span className="chart-window">DEMO WINDOW</span>
+        <span className="chart-window">{live ? 'API WINDOW' : 'DEMO WINDOW'}</span>
       </div>
       <div className="chart-canvas">
-        <ResponsiveContainer width="100%" height="100%">
+        {history.length ? <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={history} margin={{ top: 8, right: 2, left: -26, bottom: 0 }}>
             <defs>
               <linearGradient id="telemetry-fill" x1="0" y1="0" x2="0" y2="1">
@@ -480,18 +533,18 @@ function EcgChart({ metric, history }) {
               activeDot={{ r: 3, fill: metric.color, stroke: '#08141b', strokeWidth: 2 }}
             />
           </AreaChart>
-        </ResponsiveContainer>
+        </ResponsiveContainer> : <p className="chart-empty">{live ? 'No synthetic history is available for this reading.' : 'No demo history is available.'}</p>}
       </div>
       <div className="chart-footnote">
-        <span>PERSONAL BASELINE</span>
-        <span className="baseline-key" />
-        <span>SIMULATED SIGNAL</span>
+        <span>{live ? 'NO BASELINE PROVIDED' : 'DEMO REFERENCE'}</span>
+        {!live && <span className="baseline-key" />}
+        <span>{live ? 'SYNTHETIC API DATA' : 'SIMULATED SIGNAL'}</span>
       </div>
     </div>
   )
 }
 
-function Header({ astronaut, setAstronaut, missionTime, hasAlerts }) {
+function Header({ astronaut, setAstronaut, hasAlerts, live, astronauts, analysis }) {
   return (
     <header className="topbar">
       <div className="brand-lockup">
@@ -501,27 +554,30 @@ function Header({ astronaut, setAstronaut, missionTime, hasAlerts }) {
         <div className="vital-brand">powered by <b>VitalTwin</b></div>
       </div>
       <div className="mission-lockup">
-        <span className="eyebrow">MISSION CONTROL <b>/</b> LEO-07</span>
-        <strong>ORBITAL VITALS MONITOR</strong>
+        <span className="eyebrow">AEGIS PROTOTYPE <b>/</b> EDUCATIONAL DEMO</span>
+        <strong>SYNTHETIC HEALTH DASHBOARD</strong>
       </div>
       <div className="topbar-right">
         <label className="select-wrap">
           <span>CREW</span>
           <select value={astronaut} onChange={(event) => setAstronaut(event.target.value)} aria-label="Select synthetic astronaut">
-            <option value="A-01">ASTRONAUT A-01</option>
-            <option value="A-02">ASTRONAUT A-02</option>
-            <option value="A-03">ASTRONAUT A-03</option>
+            {(live ? astronauts.length
+              ? astronauts.map((item) => ({ id: item.astronaut_id, label: item.astronaut_id }))
+              : [{ id: '', label: 'NO SYNTHETIC PROFILE' }]
+              : [
+              { id: 'A-01', label: 'ASTRONAUT A-01' },
+              { id: 'A-02', label: 'ASTRONAUT A-02' },
+              { id: 'A-03', label: 'ASTRONAUT A-03' },
+            ]).map((item) => <option key={item.id || 'empty'} value={item.id}>{item.label}</option>)}
           </select>
           <ChevronDown size={12} />
         </label>
-        <div className="elapsed-time">
-          <span>MISSION ELAPSED <i>SIMULATED</i></span>
-          <strong>{missionTime}</strong>
+        <div className={`system-state ${!live && hasAlerts ? 'system-state-alert' : ''} ${live && analysis?.anomaly_detected === true ? 'system-state-review' : ''}`}>
+          <i /><span>{live ? 'API ANALYSIS' : 'DEMO STATUS'}<br /><b>{live
+            ? getAnalysisStatusLabel(analysis)
+            : hasAlerts ? 'ALERTS ACTIVE' : 'NO ACTIVE ALERTS'}</b></span>
         </div>
-        <div className={`system-state ${hasAlerts ? 'system-state-alert' : ''}`}>
-          <i /><span>DEMO STATUS<br /><b>{hasAlerts ? 'ALERT ACTIVE' : 'NOMINAL'}</b></span>
-        </div>
-        <div className="synthetic-tag"><span /> SIMULATION <b>/</b> SYNTHETIC DATA</div>
+        <div className="synthetic-tag"><span /> SYNTHETIC EDUCATIONAL DEMO <b>/</b> {live ? 'LIVE API' : 'SIMULATION'}</div>
       </div>
     </header>
   )
@@ -529,7 +585,6 @@ function Header({ astronaut, setAstronaut, missionTime, hasAlerts }) {
 
 function LeftHud({
   astronaut,
-  onSelect,
   activeMetric,
   setActiveMetric,
   metrics,
@@ -538,23 +593,35 @@ function LeftHud({
   onScenarioChange,
   thresholds,
   onThresholdChange,
+  live,
+  onModeChange,
+  liveStatus,
+  liveError,
+  liveTimestamp,
+  onRetryLive,
+  onRunAnalysis,
+  analysisLoading,
 }) {
   const active = metrics[activeMetric]
   return (
     <aside className="left-hud">
       <div className="panel-title">
         <div><span className="panel-index">01</span><span>CREW VITALS</span></div>
-        <span className="feed-state"><i /> SIMULATED FEED</span>
+        <span className="feed-state"><i /> {live ? 'SYNTHETIC API' : 'SIMULATED FEED'}</span>
+      </div>
+      <div className="data-mode-control" role="group" aria-label="Dashboard data mode">
+        <button type="button" className={!live ? 'control-active' : ''} aria-pressed={!live} onClick={() => onModeChange('demo')}>DEMO MODE</button>
+        <button type="button" className={live ? 'control-active' : ''} aria-pressed={live} onClick={() => onModeChange('live')}>LIVE API MODE</button>
       </div>
       <div className="crew-profile">
         <div className="crew-avatar">A<span>{astronaut.slice(-2)}</span></div>
         <div className="crew-details">
-          <strong>CREW MEMBER {astronaut}</strong>
-          <span>EXPEDITION SPECIALIST</span>
+          <strong>SYNTHETIC PROFILE {astronaut || '—'}</strong>
+          <span>EDUCATIONAL DATA ONLY</span>
         </div>
         <div className="crew-signal"><Signal size={15} /></div>
       </div>
-      <label className="scenario-picker">
+      {!live ? <label className="scenario-picker">
         <span>SIMULATION / DEMO MODE</span>
         <select
           value={scenarioId}
@@ -565,8 +632,20 @@ function LeftHud({
             <option key={scenario.id} value={scenario.id}>{scenario.label}</option>
           ))}
         </select>
-      </label>
-      <details className="threshold-editor">
+      </label> : (
+        <section className={`api-connection api-connection-${liveStatus}`} aria-live="polite">
+          <span>LIVE BACKEND · SYNTHETIC DATA ONLY</span>
+          <b>{liveStatus === 'loading' ? 'LOADING API DATA' : liveStatus === 'error' ? 'API ERROR' : liveStatus === 'empty' ? 'NO SYNTHETIC PROFILE' : 'CONNECTED'}</b>
+          <small>{liveError || (liveStatus === 'empty' ? 'Create a marked synthetic astronaut and ingest synthetic readings first.' : `API ${apiBaseUrl()}${liveTimestamp ? ` · ${new Date(liveTimestamp).toLocaleString()}` : ''}`)}</small>
+          <button type="button" className="api-retry-button" onClick={onRetryLive} disabled={liveStatus === 'loading'}>
+            {liveStatus === 'ready' ? 'REFRESH LIVE DATA' : liveStatus === 'loading' ? 'CONNECTING…' : 'RETRY CONNECTION'}
+          </button>
+          <button type="button" className="analysis-button" onClick={onRunAnalysis} disabled={analysisLoading || liveStatus !== 'ready'}>
+            {analysisLoading ? 'RUNNING LOCAL ML…' : 'RUN LOCAL ML ANALYSIS'}
+          </button>
+        </section>
+      )}
+      {!live && <details className="threshold-editor">
         <summary>CONFIGURE DEMO THRESHOLDS <span>Δ FROM BASELINE</span></summary>
         <div className="threshold-fields">
           {THRESHOLD_FIELDS.map(({ key, direction, label }) => (
@@ -596,7 +675,7 @@ function LeftHud({
           ))}
         </div>
         <p>Illustrative deviation values; not clinical limits.</p>
-      </details>
+      </details>}
       <div className="metrics-stack">
         {metrics.map((metric, index) => (
           <MetricCard
@@ -604,27 +683,44 @@ function LeftHud({
             metric={metric}
             index={index}
             active={activeMetric === index}
-            onSelect={() => {
-              setActiveMetric(index)
-              if (metric.name === 'Heart rate') onSelect('heart')
-              if (metric.name === 'Oxygen saturation' || metric.name === 'Respiration') onSelect('leftLung')
-              if (metric.name === 'Body temperature') onSelect('abdomen')
-            }}
+            live={live}
+            onSelect={() => setActiveMetric(index)}
           />
         ))}
       </div>
-      <EcgChart metric={active} history={history} />
+      <EcgChart metric={active} history={history} live={live} />
       <div className="baseline-note">
         <span className="baseline-symbol"><Crosshair size={13} /></span>
-        <span>Values compared to <b>individual baseline</b><br />Synthetic crew profile · 14h window</span>
+        <span>{live ? <>Backend values only<br /><b>No baseline interpretation</b></> : <>Values compared to <b>demo references</b><br />Synthetic illustration · 14h span</>}</span>
         <CircleHelp size={13} className="help-icon" />
       </div>
     </aside>
   )
 }
 
+function getDrawerTabStops(panel) {
+  if (!panel) return []
+  return [...panel.querySelectorAll('button, select, input, textarea, a[href], area[href], summary, iframe, [tabindex], [contenteditable="true"], audio[controls], video[controls]')]
+    .filter((element) => {
+      if (element.tabIndex < 0 || element.matches(':disabled, input[type="hidden"]')
+        || element.closest('[hidden], [inert], [aria-hidden="true"], [aria-disabled="true"]')) return false
+      const style = window.getComputedStyle(element)
+      if (!element.getClientRects().length || ['hidden', 'collapse'].includes(style.visibility)) return false
+      // Closed details can still report layout boxes for their hidden controls.
+      for (let parent = element.parentElement; parent && parent !== panel; parent = parent.parentElement) {
+        if (parent.tagName === 'DETAILS' && !parent.open) {
+          const summary = [...parent.children].find((child) => child.tagName === 'SUMMARY')
+          if (!summary?.contains(element)) return false
+        }
+      }
+      return true
+    })
+    .sort((a, b) => (a.tabIndex || Infinity) - (b.tabIndex || Infinity))
+}
+
 function RightHud({
   selected,
+  astronaut,
   readings,
   alerts,
   regionStatuses,
@@ -632,27 +728,109 @@ function RightHud({
   updatedAt,
   mobileOpen,
   onClose,
+  mobileView,
+  triggerRef,
+  live,
+  analysis,
+  assistant,
+  assistantStatus,
+  assistantMode,
+  chatMessages,
+  chatPending,
+  chatError,
+  chatDraft,
+  onChatDraftChange,
+  onChatSubmit,
+  scenarioLabel,
+  modelInfo,
+  layer,
+  onSetMarker,
+  onClearMarker,
+  customMarkers,
 }) {
+  const panelRef = useRef(null)
   const region = selected ? REGIONS[selected] : null
-  const alertSeverity = alerts.some((alert) => alert.severity === 'critical')
+
+  useEffect(() => {
+    if (!mobileView || !mobileOpen) return undefined
+    const panel = panelRef.current
+    const trigger = triggerRef.current
+    const previousFocus = document.activeElement
+    const opener = previousFocus instanceof HTMLElement && previousFocus !== document.body
+      && !panel?.contains(previousFocus) ? previousFocus : trigger
+    const keepFocusInside = (event) => {
+      if (!panel?.contains(event.target)) panel?.focus()
+    }
+    panel?.focus()
+    document.addEventListener('focusin', keepFocusInside)
+    return () => {
+      document.removeEventListener('focusin', keepFocusInside)
+      const restoreTarget = opener?.isConnected ? opener : trigger
+      restoreTarget?.focus()
+    }
+  }, [mobileOpen, mobileView, triggerRef])
+
+  useEffect(() => {
+    if (!mobileView || !mobileOpen) return undefined
+    const closeOnEscape = (event) => {
+      if (event.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', closeOnEscape)
+    return () => window.removeEventListener('keydown', closeOnEscape)
+  }, [mobileOpen, mobileView, onClose])
+
+  const trapDrawerTab = (event) => {
+    if (event.key !== 'Tab' || !mobileView || !mobileOpen) return
+    const focusable = getDrawerTabStops(panelRef.current)
+    event.preventDefault()
+    if (!focusable.length) {
+      panelRef.current?.focus()
+      return
+    }
+    const currentIndex = focusable.indexOf(document.activeElement)
+    const nextIndex = currentIndex < 0
+      ? event.shiftKey ? focusable.length - 1 : 0
+      : (currentIndex + (event.shiftKey ? -1 : 1) + focusable.length) % focusable.length
+    focusable[nextIndex].focus()
+  }
+  const demoStatus = alerts.some((alert) => alert.severity === 'critical')
     ? 'critical'
     : alerts.length
       ? 'warning'
       : 'normal'
-  const status = selected ? regionStatuses[selected] : alertSeverity
-  const regionalAlerts = alerts.filter((alert) => alert.region === selected)
+  const status = selected
+    ? getSelectionStatus(regionStatuses, selected)
+    : live ? getAnalysisStatusTone(analysis) : demoStatus
+  const statusLabel = selected
+    ? status.toUpperCase()
+    : live ? getAnalysisStatusLabel(analysis) : alerts.length ? status.toUpperCase() : 'NO ACTIVE ALERTS'
+  const regionalAlerts = selected ? getLocalizedFindings(alerts, selected) : alerts.filter((alert) => alert.region == null)
+  const meshAvailable = Boolean(modelInfo.focusPoints?.[selected])
+  const selectionInLayer = layer === 'full' || modelInfo.layerCoverage?.[layer]?.includes(selected)
+    || (['head', 'brain'].includes(selected) && meshAvailable)
   const visibleAlerts = alerts
-  const indicators = selected === 'heart'
+  const indicators = live
+    ? selected
+      ? [
+        ['Region status', 'NO DATA', 'No region-specific sensor was supplied'],
+        ['Direct measurements', 'None', 'Global readings are not localized'],
+      ]
+      : [
+        ['ML analysis', getAnalysisStatusLabel(analysis), analysis?.is_mock ? 'Explicit mock output' : 'Synthetic inputs only'],
+        ['Affected measurements', analysis?.affected_measurements?.join(', ') || 'None reported', 'No anatomical mapping is inferred'],
+        ['Data source', analysis?.data_source ?? 'Synthetic API', 'No NASA telemetry'],
+      ]
+    : selected === 'heart'
     ? [
-      ['Heart rate', `${readings.heart_rate_bpm} bpm`, `Demo baseline ${HEALTH_BASELINE.heart_rate_bpm} bpm`],
-      ['Baseline difference', `${readings.heart_rate_bpm - HEALTH_BASELINE.heart_rate_bpm >= 0 ? '+' : ''}${readings.heart_rate_bpm - HEALTH_BASELINE.heart_rate_bpm} bpm`, 'Synthetic comparison only'],
+        ['Heart rate', `${readings.heart_rate_bpm} bpm`, 'General synthetic reading · not heart-localized'],
+        ['Baseline difference', `${readings.heart_rate_bpm - HEALTH_BASELINE.heart_rate_bpm >= 0 ? '+' : ''}${readings.heart_rate_bpm - HEALTH_BASELINE.heart_rate_bpm} bpm`, 'Demo reference comparison only'],
       ['Trend window', '28 demo points', 'Illustrative series; no prediction'],
     ]
     : ['leftLung', 'rightLung'].includes(selected)
       ? [
         ['SpO₂', `${readings.spo2_percent}%`, 'General synthetic reading · not lung-localized'],
         ['Respiration', `${readings.respiration_rate_bpm} /min`, 'General synthetic reading · not lung-localized'],
-        ['Personal baseline', `${HEALTH_BASELINE.spo2_percent}% · ${HEALTH_BASELINE.respiration_rate_bpm} /min`, 'Demo reference values'],
+          ['Demo references', `${HEALTH_BASELINE.spo2_percent}% · ${HEALTH_BASELINE.respiration_rate_bpm} /min`, 'Illustrative comparison values'],
         ['Trend window', '28 demo points', 'Illustrative series; no prediction'],
       ]
       : selected
@@ -669,8 +847,14 @@ function RightHud({
   return (
     <aside
       id="region-details-panel"
+      ref={panelRef}
       className={`right-hud ${mobileOpen ? 'mobile-open' : ''}`}
       aria-label="Region health details"
+      role={mobileView && mobileOpen ? 'dialog' : undefined}
+      aria-modal={mobileView && mobileOpen ? 'true' : undefined}
+      aria-hidden={mobileView && !mobileOpen ? 'true' : undefined}
+      tabIndex={mobileView && mobileOpen ? -1 : undefined}
+      onKeyDown={trapDrawerTab}
     >
       <div className="panel-title">
         <div><span className="panel-index">02</span><span>REGION ANALYSIS</span></div>
@@ -694,7 +878,12 @@ function RightHud({
       <div className="regional-metrics">
         {indicators.map(([label, value, note]) => (
           <div className="regional-metric" key={label}>
-            <div className="regional-label">{label}<span className={`region-status-chip status-${status}`}>{status.toUpperCase()}</span></div>
+            <div className="regional-label">
+              {label}
+              {(selected || label === 'Active demo alerts' || (live && label === 'ML analysis')) && (
+                <span className={`region-status-chip status-${status}`}>{statusLabel}</span>
+              )}
+            </div>
             <strong>{value}</strong>
             <span className="regional-note">{note}</span>
           </div>
@@ -702,95 +891,216 @@ function RightHud({
       </div>
       <section className={`region-detail-panel status-${status}`} aria-label="Selected region health details">
         <div className="region-detail-heading">
-          <span>{selected ? 'REGION HEALTH STATUS' : 'OVERALL DEMO STATUS'}</span>
-          <b>{status === 'no-data' ? 'NO DATA' : status.toUpperCase()}</b>
+          <span>{selected ? 'REGION HEALTH STATUS' : live ? 'OVERALL API ANALYSIS' : 'OVERALL DEMO STATUS'}</span>
+          <b>{statusLabel}</b>
         </div>
+        {selected && (
+          <dl className="regional-provenance">
+            <div><dt>Region</dt><dd>{region.name}</dd></div>
+            <div><dt>Scenario</dt><dd>{live ? 'LIVE API · synthetic inputs' : scenarioLabel}</dd></div>
+            <div><dt>Regional sensor</dt><dd>None supplied · no direct measurement</dd></div>
+            <div><dt>Source</dt><dd>{regionalAlerts.length ? 'Synthetic demonstration · explicit localized marker' : 'Anatomical reference only'}</dd></div>
+            <div><dt>Mesh</dt><dd>{!meshAvailable ? 'Unavailable in this asset; a licensed, aligned mesh is required.'
+              : selectionInLayer ? 'Available in the current view' : 'Hidden in this layer; select FULL BODY or ORGANS for an organ.'}</dd></div>
+          </dl>
+        )}
         <div className="region-detail-section">
-          <span>SIMULATED FINDINGS</span>
+          <span>{live ? 'GLOBAL ANALYSIS FINDINGS' : 'SIMULATED FINDINGS'}</span>
           {regionalAlerts.length ? (
             <ul>
-              {regionalAlerts.map((alert) => <li key={alert.id}>{alert.reason}</li>)}
+              {regionalAlerts.map((alert) => (
+                <li key={alert.id}>
+                  {alert.reason}
+                  {alert.source === 'demo-region-simulation' && (
+                    <span className="finding-source">DEMO / SYNTHETIC</span>
+                  )}
+                </li>
+              ))}
             </ul>
           ) : (
             <p>{selected
-              ? 'No region-specific synthetic finding is available for this anatomical area.'
+              ? live ? 'Global findings are not assigned to anatomical regions.' : 'No region-specific synthetic finding is available for this anatomical area.'
               : 'No region is selected. Scenario alerts remain visible below.'}</p>
           )}
         </div>
         <div className="region-detail-section">
+          <span>LIMITATIONS</span>
+          <p>{region?.explanation ?? 'Only explicit localized synthetic markers color anatomy. Global vital signs are not localized.'}</p>
+          <p>{live ? 'Grey means no regional sensor data.' : 'Cyan is an unmarked synthetic reference, not evidence of normal regional health.'} No clinical diagnosis is implied.</p>
+        </div>
+        <div className="region-detail-section">
           <span>TREND / SUGGESTED NEXT STEP</span>
           <p>
-            {regionalAlerts.some((alert) => alert.source === 'demo-region-simulation')
+            {live
+              ? 'Anomaly findings describe sensor data only. They do not localize a condition or provide a diagnosis.'
+              : regionalAlerts.some((alert) => alert.source === 'demo-region-simulation')
               ? 'Review this explicit regional demo marker and the synthetic dashboard trends; no medical action is implied.'
               : 'Review the synthetic trend display for demonstration only. No predictive or clinical recommendation is available.'}
           </p>
         </div>
         <div className="region-detail-updated">
-          SIMULATION UI UPDATED · {updatedAt.toLocaleTimeString([], {
+          {live ? 'API DATA UPDATED' : 'SIMULATION UI UPDATED'} · {updatedAt.toLocaleTimeString([], {
             hour: '2-digit',
             minute: '2-digit',
             second: '2-digit',
           })}
         </div>
       </section>
-      <div className={`ml-status demo-rule-status status-${alertSeverity}`}>
+      {!live && selected && meshAvailable && (
+        <details className="regional-marker-editor">
+          <summary>ADD AN EXPLICIT SYNTHETIC MARKER</summary>
+          <p>Visualization only · no sensor or diagnosis. Scenario changes reset added markers.</p>
+          <div>
+            <button type="button" onClick={() => onSetMarker(selected, 'warning')}>MARK WARNING</button>
+            <button type="button" onClick={() => onSetMarker(selected, 'critical')}>MARK CRITICAL</button>
+            <button type="button" onClick={() => onClearMarker(selected)} disabled={!customMarkers.some((marker) => marker.region === selected)}>CLEAR ADDED MARKER</button>
+          </div>
+        </details>
+      )}
+      <div className={`ml-status demo-rule-status status-${status}`}>
         <div className="ml-icon"><Activity size={17} /></div>
         <div className="ml-copy">
-          <span className="eyebrow">DEMO THRESHOLD SCREEN</span>
-          <strong><i /> {alerts.length ? `${alerts.length} SIMULATED ALERT${alerts.length === 1 ? '' : 'S'}` : 'NO DEMO ALERTS'}</strong>
+          <span className="eyebrow">{live ? 'BACKEND ML ANALYSIS' : 'DEMO THRESHOLD SCREEN'}</span>
+          <strong><i /> {live ? getAnalysisStatusLabel(analysis) : alerts.length ? `${alerts.length} SIMULATED ALERT${alerts.length === 1 ? '' : 'S'}` : 'NO DEMO ALERTS'}</strong>
         </div>
-        <span className="ml-score">RULES</span>
+        <span className="ml-score">{live ? analysis?.is_mock ? 'MOCK' : analysis?.model_version ?? '—' : 'RULES'}</span>
       </div>
       <div className="assistant-panel">
         <div className="assistant-heading">
           <span className="assistant-spark"><SparklesIcon size={13} /></span>
-          <div>          <span className="eyebrow">AEGIS DEMO EXPLANATION</span><b>Threshold context</b></div>
+          <div><span className="eyebrow">{live ? 'BACKEND ASSISTANT' : 'AEGIS DEMO EXPLANATION'}</span><b>{live ? `${assistantMode.toUpperCase()} MODE · ${assistantStatus}` : 'Threshold context'}</b></div>
           <span className="assistant-beta">BETA</span>
         </div>
         <p>
-          {regionalAlerts[0]?.explanation
+          {live
+            ? assistant?.answer ?? 'Run a local analysis to request an explanation. Offline fallback remains explicitly labelled.'
+            : regionalAlerts[0]?.explanation
             ?? region?.explanation
             ?? 'Rule-based visual demo only. No ML model, backend alert service, live astronaut data, or clinical assessment is connected.'}
         </p>
-        <span className="assistant-disclaimer"><Shield size={11} /> SIMULATION ONLY · NOT A DIAGNOSIS</span>
+        {live && assistant?.is_mock && <p className="assistant-fallback-note">Mock fallback: no assistant model was invoked.</p>}
+        <span className="assistant-disclaimer"><Shield size={11} /> SYNTHETIC EDUCATIONAL DEMO · NOT A DIAGNOSIS</span>
+        {live && (
+          <div className="assistant-chat">
+            <div className="assistant-chat-heading">
+              <span>ASK THE ASSISTANT</span>
+              <span>{assistantMode === 'local' ? 'SERVER PROVIDER' : 'MOCK / OFFLINE'}</span>
+            </div>
+            <div className="assistant-chat-messages" aria-live="polite" aria-relevant="additions text">
+              {chatMessages.map((message, index) => (
+                <article className={`assistant-chat-message message-${message.role}`} key={`${index}-${message.role}`}>
+                  <strong>
+                    {message.role === 'user' ? 'YOU' : message.isMock
+                      ? 'MOCK / OFFLINE RESPONSE'
+                      : 'REAL PROVIDER RESPONSE'}
+                  </strong>
+                  <p>{message.content}</p>
+                  {message.role === 'assistant' && message.assistantVersion && (
+                    <span className="assistant-chat-version">{message.assistantVersion} · {message.status} · {message.dataSource}</span>
+                  )}
+                  {message.role === 'assistant' && (
+                    <span className="assistant-chat-limitation">
+                      {message.analysis
+                        ? `Selected analysis #${message.analysis.analysis_id}: ${message.analysis.status} · ${message.analysis.is_mock ? 'mock' : 'algorithmic'} · ${message.analysis.data_source}`
+                        : 'No analysis selected; analysis context is unknown.'}
+                    </span>
+                  )}
+                  {message.role === 'assistant' && message.limitations?.map((limitation) => (
+                    <span className="assistant-chat-limitation" key={limitation}>{limitation}</span>
+                  ))}
+                </article>
+              ))}
+              {chatPending && (
+                <div className="assistant-chat-loading" role="status">
+                  <span className="assistant-chat-spinner" aria-hidden="true" />
+                  Waiting for the backend assistant response…
+                </div>
+              )}
+            </div>
+            {chatError && <p className="assistant-chat-error" role="alert">{chatError}</p>}
+            <form
+              className="assistant-chat-form"
+              onSubmit={(event) => {
+                event.preventDefault()
+                onChatSubmit()
+              }}
+            >
+              <label className="assistant-chat-label" htmlFor="assistant-question">
+                Ask about the synthetic data or analysis
+              </label>
+              <textarea
+                id="assistant-question"
+                value={chatDraft}
+                onChange={(event) => onChatDraftChange(event.target.value)}
+                maxLength={2000}
+                rows={3}
+                placeholder="What does this model finding mean?"
+                disabled={!astronaut || chatPending}
+              />
+              <div className="assistant-chat-submit-row">
+                <span>Questions are sent to the backend; no API key is used in the browser.</span>
+                <button type="submit" disabled={!astronaut || !chatDraft.trim() || chatPending}>
+                  {chatPending ? 'WAIT…' : 'SEND'}
+                </button>
+              </div>
+            </form>
+            {assistantMode === 'local' && chatMessages.some((message) => message.role === 'assistant' && !message.isMock) && (
+              <p className="assistant-provider-note">
+                The backend reports a non-mock provider response. Its contract does not identify Gemini by name.
+              </p>
+            )}
+          </div>
+        )}
       </div>
       <div className="alerts-heading">
-        <span>SIMULATED ALERTS</span><span>{alertCountLabel}</span>
+        <span>{live ? 'ANALYSIS FINDINGS' : 'SIMULATED ALERTS'}</span><span>{alertCountLabel}</span>
       </div>
       <div className="alert-legend" aria-label="Alert color legend">
-        <span><i className="legend-normal" />NORMAL</span>
-        <span><i className="legend-warning" />WARNING</span>
-        <span><i className="legend-critical" />CRITICAL</span>
-        <span><i className="legend-no-data" />NO DATA</span>
+        {live ? <>
+          <span><i className="legend-normal" />NORMAL MODEL STATUS</span>
+          <span><i className="legend-analysis" />MODEL FINDING</span>
+          <span><i className="legend-no-data" />NOT ASSESSED</span>
+        </> : <>
+          <span><i className="legend-normal" />NORMAL</span>
+          <span><i className="legend-warning" />WARNING</span>
+          <span><i className="legend-critical" />CRITICAL</span>
+          <span><i className="legend-no-data" />NO DATA</span>
+        </>}
       </div>
       {visibleAlerts.length ? visibleAlerts.map((alert) => (
         <button
-          className={`alert-item alert-item-${alert.severity}`}
+          className={`alert-item ${alert.severity ? `alert-item-${alert.severity}` : 'alert-item-analysis'}`}
           key={alert.id}
-          onClick={() => onSelectRegion(alert.region)}
+          onClick={() => alert.region && onSelectRegion(alert.region)}
           type="button"
+          disabled={!alert.region}
         >
           <span className="alert-mark"><AlertTriangle size={11} /></span>
           <span className="alert-copy">
-            <b>{REGIONS[alert.region]?.name ?? alert.region} · {alert.measurement}</b>
+            <b>{REGIONS[alert.region]?.name ?? (alert.region ?? 'GLOBAL')} · {alert.measurement}</b>
             <span>
               {alert.value === undefined
                 ? alert.reason
                 : `${alert.value} ${alert.unit} · baseline ${alert.baseline} ${alert.unit} · Δ ${alert.deviation > 0 ? '+' : ''}${alert.deviation}`}
             </span>
+            {alert.source === 'demo-region-simulation' && (
+              <span className="alert-source">DEMO / SYNTHETIC</span>
+            )}
           </span>
-          <span className="alert-type">{alert.severity.toUpperCase()}</span>
+          <span className="alert-type">{alert.severity?.toUpperCase() ?? 'MODEL FINDING'}</span>
         </button>
       )) : (
-        <p className="no-alerts">No active alerts in this synthetic scenario.</p>
+        <p className="no-alerts">{live ? 'No anomaly findings are available. Run local analysis after ingesting synthetic history.' : 'No active alerts in this synthetic scenario.'}</p>
       )}
-      <p className="alert-disclaimer">Demo thresholds and explicit region markers are illustrative only; they are not clinical limits.</p>
+      <p className="alert-disclaimer">{live ? 'Analysis output is synthetic and not a diagnosis. No anatomical localization is performed.' : 'Synthetic educational demo only. Global vital-sign alerts are not localized; only explicit regional demo markers highlight anatomy.'}</p>
     </aside>
   )
 }
 
 function ViewControls({
   mode,
+  layer,
+  setLayer,
   setMode,
   labels,
   setLabels,
@@ -801,15 +1111,22 @@ function ViewControls({
   selected,
   focusPoints,
   onSelectRegion,
+  layerIndicators,
+  alerts,
 }) {
+  const localized = alerts.filter((alert) => alert.source === 'demo-region-simulation')
+  const overall = localized.some((alert) => alert.severity === 'critical') ? 'critical' : localized.length ? 'warning' : 'normal'
   return (
     <div className="view-controls">
-      <div className="view-control-label"><span>HOLOGRAM VIEW</span><i /></div>
-      <div className="control-group camera-controls">
-        <button onClick={resetCamera} title="Reset camera" aria-label="Reset camera"><RotateCcw size={14} /><span>RESET</span></button>
+      <div className={`view-control-label anatomy-alert-summary status-${overall}`} role="status" aria-live="polite">
+        <span>HOLOGRAM VIEW</span><i />
+        <span>{localized.length ? `${localized.length} LOCALIZED MARKER${localized.length === 1 ? '' : 'S'}` : 'NO LOCALIZED MARKERS'} · {alerts.length - localized.length} GLOBAL</span>
+      </div>
+      <div className="control-group camera-controls" role="group" aria-label="3D camera controls">
+        <button type="button" onClick={resetCamera} title="Reset camera" aria-label="Reset camera"><RotateCcw size={14} /><span>RESET</span></button>
         <i />
-        <button onClick={() => zoomCamera(0.82)} title="Zoom in" aria-label="Zoom in"><Plus size={15} /></button>
-        <button onClick={() => zoomCamera(1.22)} title="Zoom out" aria-label="Zoom out"><Minus size={15} /></button>
+        <button type="button" onClick={() => zoomCamera(0.82)} title="Zoom in" aria-label="Zoom in"><Plus size={15} /></button>
+        <button type="button" onClick={() => zoomCamera(1.22)} title="Zoom out" aria-label="Zoom out"><Minus size={15} /></button>
       </div>
       <div className="control-group mode-controls" role="group" aria-label="Body display mode">
         {[
@@ -819,7 +1136,9 @@ function ViewControls({
         ].map(([value, label]) => (
           <button
             key={value}
+            type="button"
             className={mode === value ? 'control-active' : ''}
+            aria-pressed={mode === value}
             onClick={() => setMode(value)}
           >
             {value === 'wireframe' ? <Move3D size={13} /> : value === 'anatomy' ? <Activity size={13} /> : <ScanLine size={13} />}
@@ -827,11 +1146,31 @@ function ViewControls({
           </button>
         ))}
       </div>
+      <div className="control-group layer-controls" role="group" aria-label="Anatomical layer">
+        {[
+          ['full', 'FULL BODY'],
+          ['skeleton', 'SKELETON'],
+          ['muscles', 'MUSCLES'],
+          ['organs', 'ORGANS'],
+        ].map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            className={layer === value ? 'control-active' : ''}
+            aria-pressed={layer === value}
+            title={layerIndicators[value] ? `${label}: ${layerIndicators[value]} synthetic marker on available meshes` : `${label}: no localized marker on available meshes`}
+            onClick={() => setLayer(value)}
+          >
+            {label}
+            {layerIndicators[value] && <i className={`layer-severity-dot severity-${layerIndicators[value]}`} aria-hidden="true" />}
+          </button>
+        ))}
+      </div>
       <div className="control-group toggles">
-        <button className={labels ? 'toggle-on' : ''} onClick={() => setLabels(!labels)} title="Toggle labels">
+        <button type="button" className={labels ? 'toggle-on' : ''} onClick={() => setLabels(!labels)} title="Toggle labels" aria-label="Show anatomy labels" aria-pressed={labels}>
           <span className="toggle-switch"><i /></span><span>LABELS</span>
         </button>
-        <button className={scan ? 'toggle-on' : ''} onClick={() => setScan(!scan)} title="Toggle scan effect">
+        <button type="button" className={scan ? 'toggle-on' : ''} onClick={() => setScan(!scan)} title="Toggle scan effect" aria-label="Show scan animation" aria-pressed={scan}>
           <span className="toggle-switch"><i /></span><span>SCAN</span>
         </button>
       </div>
@@ -845,7 +1184,7 @@ function ViewControls({
           <option value="">FULL BODY</option>
           {Object.entries(REGIONS).map(([key, region]) => (
             <option key={key} value={key} disabled={!focusPoints[key]}>
-              {region.shortName}
+              {region.shortName}{!focusPoints[key] ? ' · UNAVAILABLE' : ''}
             </option>
           ))}
         </select>
@@ -856,46 +1195,237 @@ function ViewControls({
 }
 
 function App() {
+  const [appMode, setAppMode] = useState('demo')
   const [selectedRegion, setSelectedRegion] = useState(null)
   const [modelInfo, setModelInfo] = useState({})
   const [scenarioId, setScenarioId] = useState('normal')
+  const [customMarkersByAstronaut, setCustomMarkersByAstronaut] = useState(() => new Map())
   const [thresholds, setThresholds] = useState(DEMO_THRESHOLDS)
   const [mode, setMode] = useState('outer')
+  const [layer, setLayer] = useState('full')
   const [labels, setLabels] = useState(true)
   const [scan, setScan] = useState(true)
   const [modelStatus, setModelStatus] = useState('loading')
   const [updatedAt, setUpdatedAt] = useState(() => new Date())
   const [mobileDetailsOpen, setMobileDetailsOpen] = useState(false)
+  const [isMobileViewport, setIsMobileViewport] = useState(() => (
+    typeof window !== 'undefined' && window.matchMedia?.('(max-width: 690px)').matches === true
+  ))
   const [activeMetric, setActiveMetric] = useState(0)
   const [astronaut, setAstronaut] = useState('A-01')
-  const [missionSeconds, setMissionSeconds] = useState(2 * 3600 + 14 * 60 + 8)
+  const customMarkers = useMemo(
+    () => customMarkersByAstronaut.get(astronaut) ?? [],
+    [customMarkersByAstronaut, astronaut],
+  )
+  const [syntheticAstronauts, setSyntheticAstronauts] = useState([])
+  const [liveDashboard, setLiveDashboard] = useState(null)
+  const [liveStatus, setLiveStatus] = useState('idle')
+  const [liveError, setLiveError] = useState('')
+  const [analysisLoading, setAnalysisLoading] = useState(false)
+  const [liveRefreshVersion, setLiveRefreshVersion] = useState(0)
+  const [modelRetryKey, setModelRetryKey] = useState(0)
+  const [assistant, setAssistant] = useState(null)
+  const [assistantStatus, setAssistantStatus] = useState('NOT REQUESTED')
+  const [chatMessages, setChatMessages] = useState([])
+  const [chatPending, setChatPending] = useState(false)
+  const [chatError, setChatError] = useState('')
+  const [chatDraft, setChatDraft] = useState('')
   const controlsRef = useRef()
+  const mobileDetailsTriggerRef = useRef(null)
+  const analysisRequestRef = useRef({ controller: null, generation: 0 })
+  const chatRequestRef = useRef(null)
+  const assistantMode = import.meta.env.VITE_ASSISTANT_MODE === 'local' ? 'local' : 'mock'
+  const reducedMotion = usePrefersReducedMotion()
   const snapshot = useMemo(() => createDemoSnapshot(scenarioId), [scenarioId])
-  const { alerts, regionStatuses } = useMemo(
+  const demoEvaluation = useMemo(
     () => evaluateSyntheticAlerts(snapshot.readings, {
       thresholds,
-      regionAlerts: snapshot.regionAlerts,
+      regionAlerts: [...snapshot.regionAlerts, ...customMarkers],
     }),
-    [snapshot, thresholds],
+    [snapshot, thresholds, customMarkers],
   )
-  const metrics = useMemo(
-    () => getMetrics(snapshot.readings, regionStatuses),
-    [snapshot, regionStatuses],
+  const emptyReadings = {
+    heart_rate_bpm: null,
+    spo2_percent: null,
+    body_temperature_c: null,
+    respiration_rate_bpm: null,
+  }
+  const liveReadings = liveDashboard
+    ? {
+      heart_rate_bpm: liveDashboard.readings.heart_rate_bpm,
+      spo2_percent: liveDashboard.readings.spo2_percent,
+      body_temperature_c: liveDashboard.readings.skin_temperature_c,
+      respiration_rate_bpm: liveDashboard.readings.respiration_rate_bpm,
+    }
+    : emptyReadings
+  const liveAnalysis = liveDashboard?.analysis ?? null
+  const liveAlerts = getAnalysisFindings(liveAnalysis)
+  const isLive = appMode === 'live'
+  const readings = isLive ? liveReadings : snapshot.readings
+  const alerts = isLive ? liveAlerts : demoEvaluation.alerts
+  const regionStatuses = isLive
+    ? Object.fromEntries(Object.keys(demoEvaluation.regionStatuses).map((region) => [region, 'no-data']))
+    : demoEvaluation.regionStatuses
+  const history = useMemo(
+    () => isLive ? liveDashboard?.history ?? [] : getDemoHistory(snapshot.readings),
+    [isLive, liveDashboard, snapshot],
   )
-  const history = useMemo(() => getHistory(snapshot.readings), [snapshot])
+  const metrics = useMemo(() => getMetrics(readings, alerts, isLive), [readings, alerts, isLive])
   const focusPoints = modelInfo.focusPoints ?? {}
+  const focusRadii = modelInfo.focusRadii ?? {}
+  const layerIndicators = getLayerAlertIndicators(modelInfo.layerCoverage, regionStatuses)
+  const scenarioLabel = DEMO_SCENARIOS.find((scenario) => scenario.id === scenarioId)?.label ?? 'Unknown scenario'
+  const anatomyContextNote = modelStatus !== 'ready' ? 'Anatomical structures are unavailable until the model loads.'
+    : ['head', 'brain'].includes(selectedRegion)
+      ? modelInfo.meshNames?.includes('brain') ? 'VERIFIED BRAIN · ORIGINAL POSITION / SCALE · TRANSPARENT HEAD REFERENCE'
+        : 'BRAIN MESH UNAVAILABLE · HEAD REFERENCE ONLY'
+      : layer === 'muscles' ? 'HEAD: SKULL / JAW REFERENCE · NO FACE OR SCALP MUSCLE MESHES'
+        : layer === 'organs' ? 'NAMED ORGANS · TRANSLUCENT BODY REFERENCE · SELECT AN ORGAN'
+          : isLive ? 'GREY = NO REGIONAL SENSOR DATA' : 'CYAN = UNMARKED DEMO REFERENCE · NO REGIONAL SENSOR DATA'
 
-  useEffect(() => {
-    const timer = window.setInterval(() => setMissionSeconds((time) => time + 1), 1000)
-    return () => window.clearInterval(timer)
+  const cancelPendingAnalysis = useCallback(() => {
+    analysisRequestRef.current.generation += 1
+    analysisRequestRef.current.controller?.abort()
+    analysisRequestRef.current.controller = null
   }, [])
 
-  const missionTime = useMemo(() => {
-    const hours = Math.floor(missionSeconds / 3600)
-    const minutes = Math.floor((missionSeconds % 3600) / 60)
-    const seconds = missionSeconds % 60
-    return `T+${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
-  }, [missionSeconds])
+  const cancelPendingChat = useCallback((updateState = true) => {
+    chatRequestRef.current?.controller.abort()
+    chatRequestRef.current = null
+    if (updateState) setChatPending(false)
+  }, [])
+
+  const submitChatQuestion = () => {
+    const question = chatDraft.trim()
+    if (!question || !isLive || !astronaut || chatRequestRef.current) return
+
+    const controller = new AbortController()
+    const request = { controller, astronaut }
+    chatRequestRef.current = request
+    setChatDraft('')
+    setChatError('')
+    setChatMessages((current) => [...current, { role: 'user', content: question }])
+    setChatPending(true)
+
+    askAssistantQuestion(astronaut, question, assistantMode, liveAnalysis?.id ?? null, {
+      signal: controller.signal,
+    }).then((response) => {
+      if (chatRequestRef.current !== request) return
+      setChatMessages((current) => [...current, {
+        role: 'assistant',
+        content: response.answer,
+        isMock: response.is_mock,
+        assistantVersion: response.assistant_version,
+        limitations: response.limitations,
+        status: response.status,
+        dataSource: response.data_source,
+        analysis: response.context?.analysis ?? null,
+      }])
+    }).catch((error) => {
+      if (chatRequestRef.current !== request || isApiRequestCancelled(error)) return
+      setChatError(error.message)
+    }).finally(() => {
+      if (chatRequestRef.current === request) {
+        chatRequestRef.current = null
+        setChatPending(false)
+      }
+    })
+  }
+
+  const requestAssistant = useCallback(async (analysis, { signal } = {}) => {
+    if (!analysis || !astronaut || appMode !== 'live') return
+    // Loading a dashboard or running ML must never spend a model request.
+    // Only the explicit chat form uses the configured provider mode.
+    const configuredMode = 'mock'
+    setAssistantStatus(configuredMode === 'local' ? 'CONNECTING' : 'MOCK MODE')
+    try {
+      const response = await askForExplanation(astronaut, analysis.id, configuredMode, { signal })
+      setAssistant(response)
+      setAssistantStatus(response.is_mock ? 'MOCK RESPONSE' : 'CONNECTED RESPONSE')
+    } catch (error) {
+      if (isApiRequestCancelled(error)) return
+      if (configuredMode === 'local') {
+        try {
+          const fallback = await askForExplanation(astronaut, analysis.id, 'mock', { signal })
+          setAssistant(fallback)
+          setAssistantStatus('MOCK FALLBACK')
+          return
+        } catch (fallbackError) {
+          if (isApiRequestCancelled(fallbackError)) return
+          setAssistant(null)
+          setAssistantStatus(`UNAVAILABLE · ${fallbackError.message}`)
+          return
+        }
+      }
+      setAssistant(null)
+      setAssistantStatus(`UNAVAILABLE · ${error.message}`)
+    }
+  }, [appMode, astronaut])
+
+  useEffect(() => {
+    if (!isLive) return undefined
+    let active = true
+    const controller = new AbortController()
+    fetchSyntheticAstronauts({ signal: controller.signal })
+      .then((profiles) => {
+        if (!active) return
+        setSyntheticAstronauts(profiles)
+        if (!profiles.length) {
+          setAstronaut('')
+          setLiveStatus('empty')
+          return
+        }
+        setAstronaut((current) => profiles.some((profile) => profile.astronaut_id === current)
+          ? current
+          : profiles[0].astronaut_id)
+      })
+      .catch((error) => {
+        if (!active || isApiRequestCancelled(error)) return
+        setSyntheticAstronauts([])
+        setLiveStatus('error')
+        setLiveError(error.message)
+      })
+    return () => {
+      active = false
+      controller.abort()
+    }
+  }, [isLive, liveRefreshVersion])
+
+  useEffect(() => {
+    if (!isLive || !astronaut || !syntheticAstronauts.some((profile) => profile.astronaut_id === astronaut)) return undefined
+    let active = true
+    const controller = new AbortController()
+    fetchLiveDashboard(astronaut, { signal: controller.signal })
+      .then((dashboard) => {
+        if (!active) return
+        setLiveDashboard(dashboard)
+        setLiveStatus(dashboard.source ? 'ready' : 'empty')
+        setUpdatedAt(new Date())
+        if (dashboard.analysis) requestAssistant(dashboard.analysis, { signal: controller.signal })
+      })
+      .catch((error) => {
+        if (!active || isApiRequestCancelled(error)) return
+        setLiveStatus('error')
+        setLiveError(error.message)
+      })
+    return () => {
+      active = false
+      controller.abort()
+    }
+  }, [isLive, astronaut, syntheticAstronauts, requestAssistant, liveRefreshVersion])
+
+  useEffect(() => {
+    if (!window.matchMedia) return undefined
+    const mediaQuery = window.matchMedia('(max-width: 690px)')
+    const updateViewport = (event) => setIsMobileViewport(event.matches)
+    mediaQuery.addEventListener?.('change', updateViewport)
+    return () => mediaQuery.removeEventListener?.('change', updateViewport)
+  }, [])
+
+  useEffect(() => () => {
+    cancelPendingAnalysis()
+    cancelPendingChat(false)
+  }, [cancelPendingAnalysis, cancelPendingChat])
 
   const resetCamera = () => {
     setSelectedRegion(null)
@@ -903,7 +1433,9 @@ function App() {
   }
 
   const selectRegion = (region) => {
-    setSelectedRegion(region && focusPoints[region] ? region : null)
+    const nextRegion = region && focusPoints[region] ? region : null
+    setSelectedRegion(nextRegion)
+    if (isMobileViewport) setMobileDetailsOpen(Boolean(nextRegion))
   }
 
   const updateThreshold = (key, direction, level, inputValue) => {
@@ -930,6 +1462,11 @@ function App() {
 
   const changeScenario = (nextScenarioId) => {
     setScenarioId(nextScenarioId)
+    setCustomMarkersByAstronaut((current) => {
+      const next = new Map(current)
+      next.delete(astronaut)
+      return next
+    })
     setSelectedRegion(null)
     setUpdatedAt(new Date())
   }
@@ -937,6 +1474,7 @@ function App() {
   const zoomCamera = (scale) => {
     const controls = controlsRef.current
     if (!controls) return
+    controls.dispatchEvent({ type: 'start' })
     const offset = controls.object.position.clone().sub(controls.target)
     const nextDistance = THREE.MathUtils.clamp(
       offset.length() * scale,
@@ -948,20 +1486,127 @@ function App() {
     controls.update()
   }
 
+  const changeAppMode = (nextMode) => {
+    if (nextMode === appMode) return
+    cancelPendingAnalysis()
+    cancelPendingChat()
+    setAnalysisLoading(false)
+    setAppMode(nextMode)
+    setSelectedRegion(null)
+    setAssistant(null)
+    setLiveDashboard(null)
+    setChatMessages([])
+    setChatError('')
+    setChatDraft('')
+    setLiveError('')
+    if (nextMode === 'demo') setAstronaut('A-01')
+    else {
+      setLiveStatus('loading')
+      setAstronaut('')
+      setSyntheticAstronauts([])
+    }
+  }
+
+  const changeAstronaut = (nextAstronaut) => {
+    cancelPendingAnalysis()
+    cancelPendingChat()
+    setAnalysisLoading(false)
+    setAstronaut(nextAstronaut)
+    if (isLive) {
+      setLiveStatus('loading')
+      setLiveError('')
+      setLiveDashboard(null)
+      setAssistant(null)
+      setChatMessages([])
+      setChatError('')
+      setChatDraft('')
+    }
+  }
+
+  const retryLiveConnection = () => {
+    if (!isLive) return
+    cancelPendingChat()
+    setLiveStatus('loading')
+    setLiveError('')
+    setLiveDashboard(null)
+    setChatMessages([])
+    setChatError('')
+    setChatDraft('')
+    setSyntheticAstronauts([])
+    setAstronaut('')
+    setLiveRefreshVersion((version) => version + 1)
+  }
+
+  const closeMobileDetails = useCallback(() => setMobileDetailsOpen(false), [])
+
+  const setRegionalMarker = (region, severity) => {
+    if (isLive || !astronaut || !focusPoints[region]) return
+    setCustomMarkersByAstronaut((current) => {
+      const next = new Map(current)
+      const markers = current.get(astronaut) ?? []
+      next.set(astronaut, [...markers.filter((marker) => marker.region !== region), {
+        id: `added-${astronaut}-${region}`, region, severity, scope: 'localized', source: 'demo-region-simulation',
+        reason: `Explicit simulated ${severity} marker for ${REGIONS[region].name}. Synthetic demonstration only; no regional sensor measurement or clinical diagnosis is implied.`,
+      }])
+      return next
+    })
+    setUpdatedAt(new Date())
+  }
+
+  const clearRegionalMarker = (region) => {
+    if (isLive || !astronaut) return
+    setCustomMarkersByAstronaut((current) => {
+      const next = new Map(current)
+      const markers = (current.get(astronaut) ?? []).filter((marker) => marker.region !== region)
+      if (markers.length) next.set(astronaut, markers)
+      else next.delete(astronaut)
+      return next
+    })
+  }
+
+  const handleRunAnalysis = async () => {
+    if (!astronaut || !liveDashboard?.source) return
+    cancelPendingAnalysis()
+    const controller = new AbortController()
+    const generation = analysisRequestRef.current.generation
+    analysisRequestRef.current.controller = controller
+    setAnalysisLoading(true)
+    setLiveError('')
+    setAssistant(null)
+    try {
+      const analysis = await runLocalAnalysis(astronaut, liveDashboard.source, {
+        signal: controller.signal,
+      })
+      if (controller.signal.aborted || analysisRequestRef.current.generation !== generation) return
+      setLiveDashboard((current) => current ? { ...current, analysis } : current)
+      setUpdatedAt(new Date())
+      await requestAssistant(analysis, { signal: controller.signal })
+    } catch (error) {
+      if (!isApiRequestCancelled(error)
+        && analysisRequestRef.current.generation === generation) setLiveError(error.message)
+    } finally {
+      if (analysisRequestRef.current.generation === generation) {
+        analysisRequestRef.current.controller = null
+        setAnalysisLoading(false)
+      }
+    }
+  }
+
   return (
     <main className="command-center">
       <div className="ambient-glow ambient-left" />
       <div className="ambient-glow ambient-right" />
       <Header
         astronaut={astronaut}
-        setAstronaut={setAstronaut}
-        missionTime={missionTime}
+        setAstronaut={changeAstronaut}
         hasAlerts={alerts.length > 0}
+        live={isLive}
+        astronauts={syntheticAstronauts}
+        analysis={liveAnalysis}
       />
       <div className="command-content">
         <LeftHud
           astronaut={astronaut}
-          onSelect={selectRegion}
           activeMetric={activeMetric}
           setActiveMetric={setActiveMetric}
           metrics={metrics}
@@ -970,23 +1615,33 @@ function App() {
           onScenarioChange={changeScenario}
           thresholds={thresholds}
           onThresholdChange={updateThreshold}
+          live={isLive}
+          onModeChange={changeAppMode}
+          liveStatus={liveStatus}
+          liveError={liveError}
+          liveTimestamp={liveDashboard?.timestamp}
+          onRetryLive={retryLiveConnection}
+          onRunAnalysis={handleRunAnalysis}
+          analysisLoading={analysisLoading}
         />
         <section className="hologram-stage" aria-label="Interactive 3D astronaut digital twin">
           <button
             type="button"
+            ref={mobileDetailsTriggerRef}
             className="mobile-details-toggle"
             onClick={() => setMobileDetailsOpen((open) => !open)}
             aria-expanded={mobileDetailsOpen}
             aria-controls="region-details-panel"
+            aria-label={mobileDetailsOpen ? 'Close region details' : 'Open region details'}
           >
             {mobileDetailsOpen ? 'CLOSE DETAILS' : 'REGION DETAILS'}
           </button>
           <div className="stage-header">
-            <span><i /> DIGITAL TWIN <b>/</b> {modelStatus === 'ready' ? 'ANATOMY MODEL' : 'SCHEMATIC FALLBACK'}</span>
+            <span><i /> ANATOMY VIEW <b>/</b> SYNTHETIC EDUCATIONAL DEMO</span>
             {labels && selectedRegion && (
               <span className="stage-focus-label">FOCUS / {REGIONS[selectedRegion].shortName}</span>
             )}
-            <span className="stage-coordinates">X 00.00 <b>Y</b> 01.84 <b>Z</b> 00.00</span>
+            <span className="stage-coordinates">LAYER / {layer.toUpperCase()}</span>
           </div>
           <div className="stage-corner corner-tl" />
           <div className="stage-corner corner-tr" />
@@ -995,31 +1650,29 @@ function App() {
           <div className="stage-grid" />
           <div className="scanline-overlay" />
           <div className="vertical-guide" />
-          <div className="stage-readout stage-readout-left">
-            <span>PROJECTION MATRIX</span><b>ACTIVE</b>
-            <i /><span>DEPTH MAPPING</span><b>12.8 CM</b>
-          </div>
-          <div className="stage-readout stage-readout-right">
-            <span>MODEL STATUS</span><b>{modelStatus === 'ready' ? 'GLB ONLINE' : modelStatus === 'error' ? 'LOAD ERROR' : modelStatus === 'missing' ? 'ASSET MISSING' : 'LOADING'}</b>
-            <i /><span>LAST SYNC</span><b>00:00:14</b>
-          </div>
           <div className="scene-wrap">
             <DigitalHuman
               mode={mode}
+              layer={layer}
               selected={selectedRegion}
               scan={scan}
               regionStatuses={regionStatuses}
               controlsRef={controlsRef}
               focusPoints={focusPoints}
+              focusRadii={focusRadii}
               onSelect={selectRegion}
               onModelStatusChange={setModelStatus}
               onModelInfo={setModelInfo}
+              retryModelKey={modelRetryKey}
+              reducedMotion={reducedMotion}
+              isDemo={!isLive}
+              mobile={isMobileViewport}
             />
           </div>
           <div className="stage-footer">
             <span><i /> {modelStatus === 'ready' ? 'ANATOMY GLB' : 'SCHEMATIC ONLY'}</span>
             <span>{selectedRegion ? REGIONS[selectedRegion].code : 'FULL BODY VIEW'}</span>
-            <span>WEBGL <b>●</b></span>
+            <span>REGION DATA <b>NOT LOCALIZED</b></span>
             <a
               className="model-attribution"
               href="https://github.com/MervinR07/open-anatomy-3d"
@@ -1031,6 +1684,8 @@ function App() {
           </div>
           <ViewControls
             mode={mode}
+            layer={layer}
+            setLayer={setLayer}
             setMode={setMode}
             labels={labels}
             setLabels={setLabels}
@@ -1041,8 +1696,11 @@ function App() {
             selected={selectedRegion}
             focusPoints={focusPoints}
             onSelectRegion={selectRegion}
+            layerIndicators={layerIndicators}
+            alerts={alerts}
           />
-          <div className={`model-note model-status-${modelStatus}`}>
+          <p className="anatomy-context-note">{anatomyContextNote}</p>
+          <div className={`model-note model-status-${modelStatus}`} role="status" aria-live="polite">
             {modelStatus === 'ready' ? <Check size={11} /> : <AlertTriangle size={11} />}
             {modelStatus === 'ready'
               ? 'ANATOMY GLB LOADED · SELECT A NAMED REGION'
@@ -1052,22 +1710,61 @@ function App() {
                   ? 'MODEL LOAD FAILED · NON-ANATOMICAL SCHEMATIC SHOWN'
                   : 'MODEL FILE MISSING · NON-ANATOMICAL SCHEMATIC SHOWN'}
           </div>
+          {(modelStatus === 'error' || modelStatus === 'missing') && (
+            <button type="button" className="model-retry-floating" onClick={() => setModelRetryKey((key) => key + 1)}>
+              RETRY MODEL LOAD
+            </button>
+          )}
         </section>
+        {isMobileViewport && mobileDetailsOpen && (
+          <button
+            type="button"
+            className="mobile-drawer-backdrop"
+            aria-label="Close region details"
+            onClick={closeMobileDetails}
+          />
+        )}
         <RightHud
           selected={selectedRegion}
-          readings={snapshot.readings}
+          readings={readings}
           alerts={alerts}
           regionStatuses={regionStatuses}
           onSelectRegion={selectRegion}
           updatedAt={updatedAt}
           mobileOpen={mobileDetailsOpen}
-          onClose={() => setMobileDetailsOpen(false)}
+          onClose={closeMobileDetails}
+          mobileView={isMobileViewport}
+          triggerRef={mobileDetailsTriggerRef}
+          live={isLive}
+          analysis={liveAnalysis}
+          assistant={assistant}
+          assistantStatus={assistantStatus}
+          astronaut={astronaut}
+          assistantMode={assistantMode}
+          chatMessages={chatMessages}
+          chatPending={chatPending}
+          chatError={chatError}
+          chatDraft={chatDraft}
+          onChatDraftChange={setChatDraft}
+          onChatSubmit={submitChatQuestion}
+          scenarioLabel={scenarioLabel}
+          modelInfo={modelInfo}
+          layer={layer}
+          onSetMarker={setRegionalMarker}
+          onClearMarker={clearRegionalMarker}
+          customMarkers={customMarkers}
         />
       </div>
       <footer className="bottom-status">
-        <div className="footer-left"><span className="footer-shield"><Shield size={13} /></span><span><b>AEGIS PROTOTYPE</b> <i>·</i> FLIGHT HEALTH SYSTEMS</span></div>
-        <div className="footer-center"><span>DATA LINK</span><b><i /> SIMULATED</b><span className="footer-divider" /><span>UPLINK LATENCY</span><b>42 MS</b><span className="footer-divider" /><span>DATA SOURCE</span><b>GENERATED FEED</b></div>
-        <div className="footer-right"><span>V 0.1.0</span><span className="footer-divider" /><span>NASA SPACE APPS 2026</span></div>
+        <div className="footer-left"><span className="footer-shield"><Shield size={13} /></span><span><b>AEGIS PROTOTYPE</b> <i>·</i> SYNTHETIC EDUCATIONAL PROTOTYPE</span></div>
+        <div className="footer-center">
+          <span>MODE</span><b>{isLive ? 'LIVE API' : 'DEMO'}</b>
+          <span className="footer-divider" />
+          <span>DATA SOURCE</span><b>SYNTHETIC</b>
+          <span className="footer-divider" />
+          <span>ANALYSIS</span><b>{isLive ? getAnalysisStatusLabel(liveAnalysis) : 'THRESHOLD DEMO'}</b>
+        </div>
+        <div className="footer-right"><span>PROTOTYPE</span><span className="footer-divider" /><span>NASA SPACE APPS 2026</span></div>
       </footer>
     </main>
   )

@@ -54,6 +54,11 @@ class SensorReading(Base):
     __tablename__ = "sensor_readings"
     __table_args__ = (
         Index("ix_readings_astronaut_type_time", "astronaut_id", "measurement_type", "timestamp"),
+        Index(
+            "uq_sensor_readings_identity",
+            "astronaut_id", "timestamp", "measurement_type", "source", "sensor_type",
+            unique=True,
+        ),
         CheckConstraint("length(trim(unit)) > 0", name="reading_unit_required"),
         CheckConstraint("length(trim(source)) > 0", name="reading_source_required"),
     )

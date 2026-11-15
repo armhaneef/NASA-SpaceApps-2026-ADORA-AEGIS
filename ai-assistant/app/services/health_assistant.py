@@ -32,14 +32,20 @@ class HealthAssistant:
             "Never present unsupported medical conclusions as facts."
         )
         prompt = self._compose_prompt(request, context_payload)
+        offline_mode = self.llm_service.offline
         try:
             answer = self.llm_service.generate(prompt, system_prompt=system_prompt)
-            summary = answer.strip() or "The system could not produce a helpful answer from the available data."
+            if answer.strip():
+                summary = answer.strip()
+            else:
+                summary = "The external AI service returned no answer. The system is using its offline fallback and is limited to the validated alert and telemetry context."
+                offline_mode = True
         except Exception as exc:  # pragma: no cover
             logger.warning("LLM generation failed: %s", exc)
             summary = (
                 "The external AI service is unavailable. The system is running in offline mode and is limited to the validated alert and telemetry context."
             )
+            offline_mode = True
 
         return ChatResponse(
             astronaut_id=request.astronaut_id,
@@ -48,7 +54,7 @@ class HealthAssistant:
             sources=[],
             status="ok",
             uncertainty="The answer is limited by the available data, safety rules, and prototype constraints.",
-            offline_mode=self.llm_service.offline,
+            offline_mode=offline_mode,
             session_id=request.session_id,
         )
 

@@ -70,6 +70,7 @@ class GroupedReading(Provenance):
     heart_rate: Measurement | None = None
     spo2: Measurement | None = None
     temperature: Measurement | None = None
+    skin_temperature: Measurement | None = None
     respiration_rate: Measurement | None = None
     co2: Measurement | None = None
 
@@ -85,7 +86,10 @@ class GroupedReading(Provenance):
 
     @staticmethod
     def measurement_fields():
-        return ("heart_rate", "spo2", "temperature", "respiration_rate", "co2")
+        return (
+            "heart_rate", "spo2", "temperature", "skin_temperature",
+            "respiration_rate", "co2",
+        )
 
     def to_readings(self) -> list[SensorCreate]:
         common = self.model_dump(include=set(Provenance.model_fields))
