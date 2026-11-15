@@ -855,7 +855,14 @@ function RightHud({
           <span>{live ? 'GLOBAL ANALYSIS FINDINGS' : 'SIMULATED FINDINGS'}</span>
           {regionalAlerts.length ? (
             <ul>
-              {regionalAlerts.map((alert) => <li key={alert.id}>{alert.reason}</li>)}
+              {regionalAlerts.map((alert) => (
+                <li key={alert.id}>
+                  {alert.reason}
+                  {alert.source === 'demo-region-simulation' && (
+                    <span className="finding-source">DEMO / SYNTHETIC</span>
+                  )}
+                </li>
+              ))}
             </ul>
           ) : (
             <p>{selected
@@ -936,6 +943,9 @@ function RightHud({
                 ? alert.reason
                 : `${alert.value} ${alert.unit} · baseline ${alert.baseline} ${alert.unit} · Δ ${alert.deviation > 0 ? '+' : ''}${alert.deviation}`}
             </span>
+            {alert.source === 'demo-region-simulation' && (
+              <span className="alert-source">DEMO / SYNTHETIC</span>
+            )}
           </span>
           <span className="alert-type">{alert.severity?.toUpperCase() ?? 'MODEL FINDING'}</span>
         </button>
@@ -1205,8 +1215,9 @@ function App() {
   }
 
   const selectRegion = (region) => {
-    setSelectedRegion(region && focusPoints[region] ? region : null)
-    if (isMobileViewport && mobileDetailsOpen) setMobileDetailsOpen(false)
+    const nextRegion = region && focusPoints[region] ? region : null
+    setSelectedRegion(nextRegion)
+    if (isMobileViewport) setMobileDetailsOpen(Boolean(nextRegion))
   }
 
   const updateThreshold = (key, direction, level, inputValue) => {

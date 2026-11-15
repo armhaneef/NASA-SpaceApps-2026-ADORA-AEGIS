@@ -25,15 +25,17 @@ export const DEMO_THRESHOLDS = Object.freeze({
   }),
 })
 
-const localizedAlert = (region, severity, reason) => ({
+const localizedAlert = (id, region, severity, reason) => ({
+  id,
   region,
   severity,
+  scope: 'localized',
   source: 'demo-region-simulation',
   reason,
 })
 
 export const DEMO_SCENARIOS = Object.freeze([
-  { id: 'normal', label: 'Baseline (synthetic demo)', readings: {} },
+  { id: 'normal', label: 'Normal baseline · synthetic demo', readings: {} },
   { id: 'heart-alert', label: 'Heart-rate alert · global demo', readings: { heart_rate_bpm: 110 } },
   {
     id: 'respiratory-alert',
@@ -45,15 +47,15 @@ export const DEMO_SCENARIOS = Object.freeze([
     label: 'Left-arm marker · localized synthetic',
     readings: {},
     regionAlerts: [
-      localizedAlert('leftArm', 'warning', 'Explicit left-arm demo marker for region-visualization testing.'),
+      localizedAlert('demo-left-arm-warning', 'leftArm', 'warning', 'Explicit left-arm demo marker for region-visualization testing.'),
     ],
   },
   {
     id: 'right-arm-alert',
-    label: 'Right-arm marker · localized synthetic',
+    label: 'Right-arm critical marker · localized synthetic',
     readings: {},
     regionAlerts: [
-      localizedAlert('rightArm', 'critical', 'Explicit right-arm demo marker for region-visualization testing.'),
+      localizedAlert('demo-right-arm-critical', 'rightArm', 'critical', 'Synthetic localized critical marker for visualization only; not a medical diagnosis.'),
     ],
   },
   {
@@ -65,9 +67,42 @@ export const DEMO_SCENARIOS = Object.freeze([
       respiration_rate_bpm: 24,
     },
     regionAlerts: [
-      localizedAlert('leftArm', 'warning', 'Explicit left-arm demo marker for multi-region visualization testing.'),
-      localizedAlert('rightArm', 'critical', 'Explicit right-arm demo marker for multi-region visualization testing.'),
-      localizedAlert('rightLeg', 'warning', 'Explicit right-leg demo marker for multi-region visualization testing.'),
+      localizedAlert('demo-multiple-left-arm-warning', 'leftArm', 'warning', 'Explicit left-arm demo marker for multi-region visualization testing.'),
+      localizedAlert('demo-multiple-right-arm-critical', 'rightArm', 'critical', 'Explicit right-arm demo marker for multi-region visualization testing.'),
+      localizedAlert('demo-multiple-right-leg-warning', 'rightLeg', 'warning', 'Explicit right-leg demo marker for multi-region visualization testing.'),
+    ],
+  },
+  {
+    id: 'left-arm-critical',
+    label: 'Left-arm critical marker · localized synthetic',
+    readings: {},
+    regionAlerts: [
+      localizedAlert('demo-left-arm-critical', 'leftArm', 'critical', 'Synthetic localized critical marker for visualization only; not a medical diagnosis.'),
+    ],
+  },
+  {
+    id: 'left-leg-critical',
+    label: 'Left-leg critical marker · localized synthetic',
+    readings: {},
+    regionAlerts: [
+      localizedAlert('demo-left-leg-critical', 'leftLeg', 'critical', 'Synthetic localized critical marker for visualization only; not a medical diagnosis.'),
+    ],
+  },
+  {
+    id: 'right-leg-critical',
+    label: 'Right-leg critical marker · localized synthetic',
+    readings: {},
+    regionAlerts: [
+      localizedAlert('demo-right-leg-critical', 'rightLeg', 'critical', 'Synthetic localized critical marker for visualization only; not a medical diagnosis.'),
+    ],
+  },
+  {
+    id: 'multiple-localized-critical',
+    label: 'Multiple localized critical markers · synthetic',
+    readings: {},
+    regionAlerts: [
+      localizedAlert('demo-multiple-critical-left-arm', 'leftArm', 'critical', 'Synthetic localized critical marker for visualization only; not a medical diagnosis.'),
+      localizedAlert('demo-multiple-critical-right-leg', 'rightLeg', 'critical', 'Synthetic localized critical marker for visualization only; not a medical diagnosis.'),
     ],
   },
 ])
@@ -206,9 +241,9 @@ export function evaluateSyntheticAlerts(
   for (const alert of getValidatedRegionAlerts(regionAlerts)) {
     alerts.push({
       ...alert,
-      id: `localized-${alert.region}`,
+      id: alert.id ?? `localized-${alert.region}`,
       measurement: 'Localized demo marker',
-      explanation: 'This region alert was set explicitly for visualization testing; it is not inferred from vital signs.',
+      explanation: 'This synthetic region marker is set explicitly for visualization; it is not inferred from vital signs and is not a diagnosis.',
     })
     updateRegionStatus(regionStatuses, alert.region, alert.severity)
   }
