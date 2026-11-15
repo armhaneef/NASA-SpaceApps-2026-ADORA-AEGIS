@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 
 from app.api.routes import create_app
 from app.services import llm_service
+from app.services.backend_integration import ASSISTANT_VERSION
 from app.services.llm_service import LLMCallError, LLMService
 
 
@@ -130,4 +131,65 @@ def test_chat_endpoint_reports_gemini_response_as_online(monkeypatch):
     assert response.status_code == 200, response.text
     assert response.json()["answer"] == "Synthetic Gemini-generated answer."
     assert response.json()["offline_mode"] is False
+    assert calls["request"]["model"] == "gemini-2.5-flash"
+
+
+def test_backend_endpoint_uses_gemini_and_returns_member4_contract(monkeypatch):
+    monkeypatch.setattr(llm_service, "settings", _settings())
+    calls = _install_fake_sdk(
+        monkeypatch,
+        lambda **_kwargs: SimpleNamespace(text="Synthetic Gemini backend answer."),
+    )
+    client = TestClient(create_app())
+
+    response = client.post(
+        "/api/v1/assistant/respond",
+        json={
+            "astronaut_id": "SYNTHETIC-ASTRONAUT-001",
+            "question": "Explain this synthetic demo context without inventing telemetry.",
+            "context": {"analysis": None},
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json() == {
+        "astronaut_id": "SYNTHETIC-ASTRONAUT-001",
+        "answer": "Synthetic Gemini backend answer.",
+        "assistant_version": ASSISTANT_VERSION,
+        "is_mock": False,
+        "limitations": [
+            "Prototype explanation only; not a diagnosis, treatment decision, or validated scientific conclusion.",
+            "The backend supplied a summary, not raw telemetry or the complete ML output.",
+            "Analysis values are synthetic or mock unless their provenance explicitly says otherwise.",
+        ],
+    }
+    assert calls["request"]["model"] == "gemini-2.5-flash"
+    assert "NASA citations" in calls["request"]["config"].kwargs["system_instruction"]
+
+
+def test_backend_endpoint_sanitizes_gemini_provider_failure(monkeypatch):
+    monkeypatch.setattr(llm_service, "settings", _settings())
+
+    class APIError(Exception):
+        code = 429
+
+    calls = _install_fake_sdk(
+        monkeypatch,
+        lambda **_kwargs: (_ for _ in ()).throw(APIError("private provider response")),
+    )
+    client = TestClient(create_app())
+    response = client.post(
+        "/api/v1/assistant/respond",
+        json={
+            "astronaut_id": "SYNTHETIC-ASTRONAUT-001",
+            "question": "Explain this synthetic demo context.",
+            "context": {"analysis": None},
+        },
+    )
+
+    assert response.status_code == 503
+    assert "private provider response" not in response.text
+    assert response.json() == {
+        "detail": "Configured local assistant provider is unavailable."
+    }
     assert calls["request"]["model"] == "gemini-2.5-flash"
