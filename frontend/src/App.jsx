@@ -43,6 +43,12 @@ import {
 } from 'recharts'
 import './App.css'
 import {
+  getAnalysisFindings,
+  getAnalysisStatusLabel,
+  getAnalysisStatusTone,
+} from './analysisPresentation.js'
+import usePrefersReducedMotion from './usePrefersReducedMotion.js'
+import {
   apiBaseUrl,
   askForExplanation,
   fetchLiveDashboard,
@@ -133,6 +139,7 @@ const REGIONS = {
 const METRIC_DEFINITIONS = [
   {
     name: 'Heart rate',
+    shortName: 'Heart rate',
     readingKey: 'heart_rate_bpm',
     alertKey: 'heart_rate_bpm',
     unit: 'bpm',
@@ -143,6 +150,7 @@ const METRIC_DEFINITIONS = [
   },
   {
     name: 'Oxygen saturation',
+    shortName: 'SpO₂',
     readingKey: 'spo2_percent',
     alertKey: 'spo2_percent',
     unit: '%',
@@ -153,6 +161,7 @@ const METRIC_DEFINITIONS = [
   },
   {
     name: 'Body temperature',
+    shortName: 'Temp.',
     readingKey: 'body_temperature_c',
     unit: '°C',
     baseline: HEALTH_BASELINE.body_temperature_c,
@@ -162,6 +171,7 @@ const METRIC_DEFINITIONS = [
   },
   {
     name: 'Respiration',
+    shortName: 'Resp.',
     readingKey: 'respiration_rate_bpm',
     alertKey: 'respiration_rate_bpm',
     unit: '/min',
@@ -224,9 +234,10 @@ function getDemoHistory(readings) {
   })
 }
 
-function ProjectionPlatform() {
+function ProjectionPlatform({ animate }) {
   const rings = useRef([])
   useFrame(({ clock }) => {
+    if (!animate) return
     rings.current.forEach((ring, index) => {
       if (ring) ring.rotation.z = clock.elapsedTime * (index % 2 ? -0.08 : 0.08)
     })
@@ -286,7 +297,7 @@ function ScanBeam({ active }) {
         <meshBasicMaterial
           color="#76eaff"
           transparent
-          opacity={0.12}
+          opacity={0.07}
           side={2}
           depthWrite={false}
           blending={THREE.AdditiveBlending}
@@ -294,13 +305,13 @@ function ScanBeam({ active }) {
       </mesh>
       <mesh position={[0, 0, 0.01]}>
         <planeGeometry args={[3.5, 0.008]} />
-        <meshBasicMaterial color="#c0fbff" transparent opacity={0.62} side={2} />
+        <meshBasicMaterial color="#c0fbff" transparent opacity={0.38} side={2} />
       </mesh>
     </group>
   )
 }
 
-function CameraFocus({ controlsRef, selected, focusPoints }) {
+function CameraFocus({ controlsRef, selected, focusPoints, reducedMotion }) {
   const focusTarget = useRef(new THREE.Vector3(0, 0, 0))
   const previousSelection = useRef(selected)
   const transitionDistance = useRef(5.8)
@@ -336,6 +347,16 @@ function CameraFocus({ controlsRef, selected, focusPoints }) {
     const direction = controls.object.position.clone().sub(controls.target).normalize()
     if (direction.lengthSq() === 0) direction.set(0, 0, 1)
 
+    if (reducedMotion) {
+      controls.target.copy(focusTarget.current)
+      controls.object.position.copy(
+        controls.target.clone().addScaledVector(direction, transitionDistance.current),
+      )
+      controls.update()
+      isTransitioning.current = false
+      return
+    }
+
     controls.target.lerp(focusTarget.current, smoothing)
     const cameraPosition = controls.target
       .clone()
@@ -364,13 +385,17 @@ function DigitalHuman({
   onSelect,
   onModelStatusChange,
   onModelInfo,
+  retryModelKey,
+  reducedMotion,
 }) {
   return (
     <Canvas
+      frameloop={reducedMotion ? 'demand' : 'always'}
       camera={{ position: [0, 0.02, 5.8], fov: 40, near: 0.1, far: 100 }}
-      dpr={[1, 1.6]}
+      dpr={[1, 1.5]}
       gl={{ antialias: true, alpha: true }}
       onPointerMissed={() => onSelect(null)}
+      aria-label="Interactive 3D anatomy. Use the region selector to navigate without a pointer."
     >
       <color attach="background" args={['#040b12']} />
       <fog attach="fog" args={['#040b12', 8, 17]} />
@@ -391,8 +416,9 @@ function DigitalHuman({
           blending={THREE.AdditiveBlending}
         />
       </mesh>
-      <Sparkles count={110} scale={[4.5, 5.2, 3.5]} size={2.2} speed={0.18} opacity={0.58} color="#85eaff" />
+      {!reducedMotion && <Sparkles count={42} scale={[4.5, 5.2, 3.5]} size={2} speed={0.12} opacity={0.42} color="#85eaff" />}
       <AnatomyModel
+        key={retryModelKey}
         mode={mode}
         layer={layer}
         selected={selected}
@@ -400,10 +426,11 @@ function DigitalHuman({
         onSelect={onSelect}
         onStatusChange={onModelStatusChange}
         onModelInfo={onModelInfo}
+        reducedMotion={reducedMotion}
       />
-      <ProjectionPlatform />
-      <ScanBeam active={scan} />
-      <CameraFocus controlsRef={controlsRef} selected={selected} focusPoints={focusPoints} />
+      <ProjectionPlatform animate={!reducedMotion} />
+      <ScanBeam active={scan && !reducedMotion} />
+      <CameraFocus controlsRef={controlsRef} selected={selected} focusPoints={focusPoints} reducedMotion={reducedMotion} />
       <OrbitControls
         ref={controlsRef}
         makeDefault
@@ -426,13 +453,16 @@ function MetricCard({ metric, index, active, onSelect, live }) {
 
   return (
     <button
+      type="button"
       className={`metric-readout ${active ? 'metric-active' : ''} metric-status-${metric.status}`}
       onClick={onSelect}
+      aria-pressed={active}
+      aria-label={`Show ${live ? 'synthetic API' : 'synthetic demo'} history for ${metric.name}`}
       style={{ '--metric-color': metric.color, '--stagger': `${index * 70}ms` }}
     >
       <div className="metric-topline">
         <span className="metric-icon"><Icon size={14} strokeWidth={1.7} /></span>
-        <span className="metric-name">{metric.name}</span>
+        <span className="metric-name">{live && metric.readingKey === 'body_temperature_c' ? 'Skin temp' : metric.shortName}</span>
         <span className="metric-live"><i />{live ? 'API' : 'SIM'}</span>
       </div>
       <div className="metric-number">
@@ -440,7 +470,7 @@ function MetricCard({ metric, index, active, onSelect, live }) {
         <span>{metric.unit}</span>
       </div>
       <div className="metric-baseline">
-        <span>{live ? 'BASELINE' : 'BASE'} {metric.baselineLabel}</span>
+        <span>{live ? 'BASELINE' : 'DEMO REF'} {metric.baselineLabel}</span>
         <span className={positive ? 'trend-up' : 'trend-down'}>
           {metric.change !== '—' && (positive ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />)}
           {metric.change}
@@ -502,7 +532,7 @@ function EcgChart({ metric, history, live }) {
         </ResponsiveContainer> : <p className="chart-empty">{live ? 'No synthetic history is available for this reading.' : 'No demo history is available.'}</p>}
       </div>
       <div className="chart-footnote">
-        <span>{live ? 'NO BASELINE PROVIDED' : 'PERSONAL BASELINE'}</span>
+        <span>{live ? 'NO BASELINE PROVIDED' : 'DEMO REFERENCE'}</span>
         {!live && <span className="baseline-key" />}
         <span>{live ? 'SYNTHETIC API DATA' : 'SIMULATED SIGNAL'}</span>
       </div>
@@ -510,7 +540,7 @@ function EcgChart({ metric, history, live }) {
   )
 }
 
-function Header({ astronaut, setAstronaut, missionTime, hasAlerts, live, astronauts, analysis }) {
+function Header({ astronaut, setAstronaut, hasAlerts, live, astronauts, analysis }) {
   return (
     <header className="topbar">
       <div className="brand-lockup">
@@ -520,29 +550,28 @@ function Header({ astronaut, setAstronaut, missionTime, hasAlerts, live, astrona
         <div className="vital-brand">powered by <b>VitalTwin</b></div>
       </div>
       <div className="mission-lockup">
-        <span className="eyebrow">MISSION CONTROL <b>/</b> LEO-07</span>
-        <strong>ORBITAL VITALS MONITOR</strong>
+        <span className="eyebrow">AEGIS PROTOTYPE <b>/</b> EDUCATIONAL DEMO</span>
+        <strong>SYNTHETIC HEALTH DASHBOARD</strong>
       </div>
       <div className="topbar-right">
         <label className="select-wrap">
           <span>CREW</span>
           <select value={astronaut} onChange={(event) => setAstronaut(event.target.value)} aria-label="Select synthetic astronaut">
-            {(live ? astronauts.map((item) => ({ id: item.astronaut_id, label: item.astronaut_id })) : [
+            {(live ? astronauts.length
+              ? astronauts.map((item) => ({ id: item.astronaut_id, label: item.astronaut_id }))
+              : [{ id: '', label: 'NO SYNTHETIC PROFILE' }]
+              : [
               { id: 'A-01', label: 'ASTRONAUT A-01' },
               { id: 'A-02', label: 'ASTRONAUT A-02' },
               { id: 'A-03', label: 'ASTRONAUT A-03' },
-            ]).map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+            ]).map((item) => <option key={item.id || 'empty'} value={item.id}>{item.label}</option>)}
           </select>
           <ChevronDown size={12} />
         </label>
-        <div className="elapsed-time">
-          <span>{live ? 'LOCAL UI CLOCK' : 'MISSION ELAPSED'} <i>{live ? 'NOT TELEMETRY' : 'SIMULATED'}</i></span>
-          <strong>{missionTime}</strong>
-        </div>
         <div className={`system-state ${!live && hasAlerts ? 'system-state-alert' : ''} ${live && analysis?.anomaly_detected === true ? 'system-state-review' : ''}`}>
           <i /><span>{live ? 'API ANALYSIS' : 'DEMO STATUS'}<br /><b>{live
-            ? analysis?.status?.replaceAll('_', ' ').toUpperCase() ?? 'NOT RUN'
-            : hasAlerts ? 'ALERT ACTIVE' : 'NOMINAL'}</b></span>
+            ? getAnalysisStatusLabel(analysis)
+            : hasAlerts ? 'ALERTS ACTIVE' : 'NO ACTIVE ALERTS'}</b></span>
         </div>
         <div className="synthetic-tag"><span /> SYNTHETIC EDUCATIONAL DEMO <b>/</b> {live ? 'LIVE API' : 'SIMULATION'}</div>
       </div>
@@ -565,6 +594,7 @@ function LeftHud({
   liveStatus,
   liveError,
   liveTimestamp,
+  onRetryLive,
   onRunAnalysis,
   analysisLoading,
 }) {
@@ -582,8 +612,8 @@ function LeftHud({
       <div className="crew-profile">
         <div className="crew-avatar">A<span>{astronaut.slice(-2)}</span></div>
         <div className="crew-details">
-          <strong>CREW MEMBER {astronaut}</strong>
-          <span>EXPEDITION SPECIALIST</span>
+          <strong>SYNTHETIC PROFILE {astronaut || '—'}</strong>
+          <span>EDUCATIONAL DATA ONLY</span>
         </div>
         <div className="crew-signal"><Signal size={15} /></div>
       </div>
@@ -603,7 +633,10 @@ function LeftHud({
           <span>LIVE BACKEND · SYNTHETIC DATA ONLY</span>
           <b>{liveStatus === 'loading' ? 'LOADING API DATA' : liveStatus === 'error' ? 'API ERROR' : liveStatus === 'empty' ? 'NO SYNTHETIC PROFILE' : 'CONNECTED'}</b>
           <small>{liveError || (liveStatus === 'empty' ? 'Create a marked synthetic astronaut and ingest synthetic readings first.' : `API ${apiBaseUrl()}${liveTimestamp ? ` · ${new Date(liveTimestamp).toLocaleString()}` : ''}`)}</small>
-          <button type="button" onClick={onRunAnalysis} disabled={analysisLoading || liveStatus !== 'ready'}>
+          <button type="button" className="api-retry-button" onClick={onRetryLive} disabled={liveStatus === 'loading'}>
+            {liveStatus === 'ready' ? 'REFRESH LIVE DATA' : liveStatus === 'loading' ? 'CONNECTING…' : 'RETRY CONNECTION'}
+          </button>
+          <button type="button" className="analysis-button" onClick={onRunAnalysis} disabled={analysisLoading || liveStatus !== 'ready'}>
             {analysisLoading ? 'RUNNING LOCAL ML…' : 'RUN LOCAL ML ANALYSIS'}
           </button>
         </section>
@@ -654,7 +687,7 @@ function LeftHud({
       <EcgChart metric={active} history={history} live={live} />
       <div className="baseline-note">
         <span className="baseline-symbol"><Crosshair size={13} /></span>
-        <span>{live ? <>Backend values only<br /><b>No baseline interpretation</b></> : <>Values compared to <b>individual baseline</b><br />Synthetic crew profile · 14h window</>}</span>
+        <span>{live ? <>Backend values only<br /><b>No baseline interpretation</b></> : <>Values compared to <b>demo references</b><br />Synthetic illustration · 14h span</>}</span>
         <CircleHelp size={13} className="help-icon" />
       </div>
     </aside>
@@ -670,18 +703,67 @@ function RightHud({
   updatedAt,
   mobileOpen,
   onClose,
+  mobileView,
+  triggerRef,
   live,
   analysis,
   assistant,
   assistantStatus,
 }) {
+  const panelRef = useRef(null)
+  const wasOpen = useRef(false)
   const region = selected ? REGIONS[selected] : null
-  const alertSeverity = alerts.some((alert) => alert.severity === 'critical')
+
+  useEffect(() => {
+    if (!mobileView) {
+      wasOpen.current = mobileOpen
+      return
+    }
+    if (mobileOpen) panelRef.current?.focus()
+    else if (wasOpen.current) triggerRef.current?.focus()
+    wasOpen.current = mobileOpen
+  }, [mobileOpen, mobileView, triggerRef])
+
+  useEffect(() => {
+    if (!mobileView || !mobileOpen) return undefined
+    const closeOnEscape = (event) => {
+      if (event.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', closeOnEscape)
+    return () => window.removeEventListener('keydown', closeOnEscape)
+  }, [mobileOpen, mobileView, onClose])
+
+  const trapDrawerTab = (event) => {
+    if (event.key !== 'Tab' || !mobileView || !mobileOpen) return
+    const focusable = panelRef.current?.querySelectorAll(
+      'button:not(:disabled), select:not(:disabled), input:not(:disabled), a[href], [tabindex]:not([tabindex="-1"])',
+    )
+    if (!focusable?.length) return
+    const first = focusable[0]
+    const last = focusable[focusable.length - 1]
+    if (document.activeElement === panelRef.current) {
+      event.preventDefault()
+      const target = event.shiftKey ? last : first
+      target.focus()
+    } else if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault()
+      last.focus()
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault()
+      first.focus()
+    }
+  }
+  const demoStatus = alerts.some((alert) => alert.severity === 'critical')
     ? 'critical'
     : alerts.length
       ? 'warning'
       : 'normal'
-  const status = selected ? regionStatuses[selected] : alertSeverity
+  const status = selected
+    ? regionStatuses[selected]
+    : live ? getAnalysisStatusTone(analysis) : demoStatus
+  const statusLabel = selected
+    ? status.toUpperCase()
+    : live ? getAnalysisStatusLabel(analysis) : alerts.length ? status.toUpperCase() : 'NO ACTIVE ALERTS'
   const regionalAlerts = alerts.filter((alert) => alert.region === selected)
   const visibleAlerts = alerts
   const indicators = live
@@ -691,7 +773,7 @@ function RightHud({
         ['Direct measurements', 'None', 'Global readings are not localized'],
       ]
       : [
-        ['ML analysis', analysis?.status?.replaceAll('_', ' ').toUpperCase() ?? 'NOT RUN', analysis?.is_mock ? 'Explicit mock result' : 'Synthetic inputs only'],
+        ['ML analysis', getAnalysisStatusLabel(analysis), analysis?.is_mock ? 'Explicit mock output' : 'Synthetic inputs only'],
         ['Affected measurements', analysis?.affected_measurements?.join(', ') || 'None reported', 'No anatomical mapping is inferred'],
         ['Data source', analysis?.data_source ?? 'Synthetic API', 'No NASA telemetry'],
       ]
@@ -705,7 +787,7 @@ function RightHud({
       ? [
         ['SpO₂', `${readings.spo2_percent}%`, 'General synthetic reading · not lung-localized'],
         ['Respiration', `${readings.respiration_rate_bpm} /min`, 'General synthetic reading · not lung-localized'],
-        ['Personal baseline', `${HEALTH_BASELINE.spo2_percent}% · ${HEALTH_BASELINE.respiration_rate_bpm} /min`, 'Demo reference values'],
+          ['Demo references', `${HEALTH_BASELINE.spo2_percent}% · ${HEALTH_BASELINE.respiration_rate_bpm} /min`, 'Illustrative comparison values'],
         ['Trend window', '28 demo points', 'Illustrative series; no prediction'],
       ]
       : selected
@@ -722,8 +804,14 @@ function RightHud({
   return (
     <aside
       id="region-details-panel"
+      ref={panelRef}
       className={`right-hud ${mobileOpen ? 'mobile-open' : ''}`}
       aria-label="Region health details"
+      role={mobileView && mobileOpen ? 'dialog' : undefined}
+      aria-modal={mobileView && mobileOpen ? 'true' : undefined}
+      aria-hidden={mobileView && !mobileOpen ? 'true' : undefined}
+      tabIndex={mobileView && mobileOpen ? -1 : undefined}
+      onKeyDown={trapDrawerTab}
     >
       <div className="panel-title">
         <div><span className="panel-index">02</span><span>REGION ANALYSIS</span></div>
@@ -747,7 +835,12 @@ function RightHud({
       <div className="regional-metrics">
         {indicators.map(([label, value, note]) => (
           <div className="regional-metric" key={label}>
-            <div className="regional-label">{label}<span className={`region-status-chip status-${status}`}>{status.toUpperCase()}</span></div>
+            <div className="regional-label">
+              {label}
+              {(selected || label === 'Active demo alerts' || (live && label === 'ML analysis')) && (
+                <span className={`region-status-chip status-${status}`}>{statusLabel}</span>
+              )}
+            </div>
             <strong>{value}</strong>
             <span className="regional-note">{note}</span>
           </div>
@@ -756,7 +849,7 @@ function RightHud({
       <section className={`region-detail-panel status-${status}`} aria-label="Selected region health details">
         <div className="region-detail-heading">
           <span>{selected ? 'REGION HEALTH STATUS' : live ? 'OVERALL API ANALYSIS' : 'OVERALL DEMO STATUS'}</span>
-          <b>{status === 'no-data' ? 'NO DATA' : status.toUpperCase()}</b>
+          <b>{statusLabel}</b>
         </div>
         <div className="region-detail-section">
           <span>{live ? 'GLOBAL ANALYSIS FINDINGS' : 'SIMULATED FINDINGS'}</span>
@@ -788,11 +881,11 @@ function RightHud({
           })}
         </div>
       </section>
-      <div className={`ml-status demo-rule-status status-${alertSeverity}`}>
+      <div className={`ml-status demo-rule-status status-${status}`}>
         <div className="ml-icon"><Activity size={17} /></div>
         <div className="ml-copy">
           <span className="eyebrow">{live ? 'BACKEND ML ANALYSIS' : 'DEMO THRESHOLD SCREEN'}</span>
-          <strong><i /> {live ? analysis?.status?.replaceAll('_', ' ').toUpperCase() ?? 'ANALYSIS NOT RUN' : alerts.length ? `${alerts.length} SIMULATED ALERT${alerts.length === 1 ? '' : 'S'}` : 'NO DEMO ALERTS'}</strong>
+          <strong><i /> {live ? getAnalysisStatusLabel(analysis) : alerts.length ? `${alerts.length} SIMULATED ALERT${alerts.length === 1 ? '' : 'S'}` : 'NO DEMO ALERTS'}</strong>
         </div>
         <span className="ml-score">{live ? analysis?.is_mock ? 'MOCK' : analysis?.model_version ?? '—' : 'RULES'}</span>
       </div>
@@ -816,14 +909,20 @@ function RightHud({
         <span>{live ? 'ANALYSIS FINDINGS' : 'SIMULATED ALERTS'}</span><span>{alertCountLabel}</span>
       </div>
       <div className="alert-legend" aria-label="Alert color legend">
-        <span><i className="legend-normal" />NORMAL</span>
-        <span><i className="legend-warning" />WARNING</span>
-        <span><i className="legend-critical" />CRITICAL</span>
-        <span><i className="legend-no-data" />NO DATA</span>
+        {live ? <>
+          <span><i className="legend-normal" />NORMAL MODEL STATUS</span>
+          <span><i className="legend-analysis" />MODEL FINDING</span>
+          <span><i className="legend-no-data" />NOT ASSESSED</span>
+        </> : <>
+          <span><i className="legend-normal" />NORMAL</span>
+          <span><i className="legend-warning" />WARNING</span>
+          <span><i className="legend-critical" />CRITICAL</span>
+          <span><i className="legend-no-data" />NO DATA</span>
+        </>}
       </div>
       {visibleAlerts.length ? visibleAlerts.map((alert) => (
         <button
-          className={`alert-item alert-item-${alert.severity}`}
+          className={`alert-item ${alert.severity ? `alert-item-${alert.severity}` : 'alert-item-analysis'}`}
           key={alert.id}
           onClick={() => alert.region && onSelectRegion(alert.region)}
           type="button"
@@ -838,7 +937,7 @@ function RightHud({
                 : `${alert.value} ${alert.unit} · baseline ${alert.baseline} ${alert.unit} · Δ ${alert.deviation > 0 ? '+' : ''}${alert.deviation}`}
             </span>
           </span>
-          <span className="alert-type">{alert.severity.toUpperCase()}</span>
+          <span className="alert-type">{alert.severity?.toUpperCase() ?? 'MODEL FINDING'}</span>
         </button>
       )) : (
         <p className="no-alerts">{live ? 'No anomaly findings are available. Run local analysis after ingesting synthetic history.' : 'No active alerts in this synthetic scenario.'}</p>
@@ -866,11 +965,11 @@ function ViewControls({
   return (
     <div className="view-controls">
       <div className="view-control-label"><span>HOLOGRAM VIEW</span><i /></div>
-      <div className="control-group camera-controls">
-        <button onClick={resetCamera} title="Reset camera" aria-label="Reset camera"><RotateCcw size={14} /><span>RESET</span></button>
+      <div className="control-group camera-controls" role="group" aria-label="3D camera controls">
+        <button type="button" onClick={resetCamera} title="Reset camera" aria-label="Reset camera"><RotateCcw size={14} /><span>RESET</span></button>
         <i />
-        <button onClick={() => zoomCamera(0.82)} title="Zoom in" aria-label="Zoom in"><Plus size={15} /></button>
-        <button onClick={() => zoomCamera(1.22)} title="Zoom out" aria-label="Zoom out"><Minus size={15} /></button>
+        <button type="button" onClick={() => zoomCamera(0.82)} title="Zoom in" aria-label="Zoom in"><Plus size={15} /></button>
+        <button type="button" onClick={() => zoomCamera(1.22)} title="Zoom out" aria-label="Zoom out"><Minus size={15} /></button>
       </div>
       <div className="control-group mode-controls" role="group" aria-label="Body display mode">
         {[
@@ -880,7 +979,9 @@ function ViewControls({
         ].map(([value, label]) => (
           <button
             key={value}
+            type="button"
             className={mode === value ? 'control-active' : ''}
+            aria-pressed={mode === value}
             onClick={() => setMode(value)}
           >
             {value === 'wireframe' ? <Move3D size={13} /> : value === 'anatomy' ? <Activity size={13} /> : <ScanLine size={13} />}
@@ -907,10 +1008,10 @@ function ViewControls({
         ))}
       </div>
       <div className="control-group toggles">
-        <button className={labels ? 'toggle-on' : ''} onClick={() => setLabels(!labels)} title="Toggle labels">
+        <button type="button" className={labels ? 'toggle-on' : ''} onClick={() => setLabels(!labels)} title="Toggle labels" aria-label="Show anatomy labels" aria-pressed={labels}>
           <span className="toggle-switch"><i /></span><span>LABELS</span>
         </button>
-        <button className={scan ? 'toggle-on' : ''} onClick={() => setScan(!scan)} title="Toggle scan effect">
+        <button type="button" className={scan ? 'toggle-on' : ''} onClick={() => setScan(!scan)} title="Toggle scan effect" aria-label="Show scan animation" aria-pressed={scan}>
           <span className="toggle-switch"><i /></span><span>SCAN</span>
         </button>
       </div>
@@ -947,6 +1048,9 @@ function App() {
   const [modelStatus, setModelStatus] = useState('loading')
   const [updatedAt, setUpdatedAt] = useState(() => new Date())
   const [mobileDetailsOpen, setMobileDetailsOpen] = useState(false)
+  const [isMobileViewport, setIsMobileViewport] = useState(() => (
+    typeof window !== 'undefined' && window.matchMedia?.('(max-width: 690px)').matches === true
+  ))
   const [activeMetric, setActiveMetric] = useState(0)
   const [astronaut, setAstronaut] = useState('A-01')
   const [syntheticAstronauts, setSyntheticAstronauts] = useState([])
@@ -954,11 +1058,14 @@ function App() {
   const [liveStatus, setLiveStatus] = useState('idle')
   const [liveError, setLiveError] = useState('')
   const [analysisLoading, setAnalysisLoading] = useState(false)
+  const [liveRefreshVersion, setLiveRefreshVersion] = useState(0)
+  const [modelRetryKey, setModelRetryKey] = useState(0)
   const [assistant, setAssistant] = useState(null)
   const [assistantStatus, setAssistantStatus] = useState('NOT REQUESTED')
-  const [missionSeconds, setMissionSeconds] = useState(2 * 3600 + 14 * 60 + 8)
   const controlsRef = useRef()
+  const mobileDetailsTriggerRef = useRef(null)
   const analysisRequestRef = useRef({ controller: null, generation: 0 })
+  const reducedMotion = usePrefersReducedMotion()
   const snapshot = useMemo(() => createDemoSnapshot(scenarioId), [scenarioId])
   const demoEvaluation = useMemo(
     () => evaluateSyntheticAlerts(snapshot.readings, {
@@ -982,18 +1089,7 @@ function App() {
     }
     : emptyReadings
   const liveAnalysis = liveDashboard?.analysis ?? null
-  const liveAlerts = liveAnalysis?.anomaly_detected === true
-    ? (liveAnalysis.affected_measurements.length
-      ? liveAnalysis.affected_measurements
-      : ['Overall synthetic anomaly']).map((measurement) => ({
-      id: `analysis-${liveAnalysis.id}-${measurement}`,
-      region: null,
-      severity: 'warning',
-      measurement,
-      reason: liveAnalysis.explanations.join(' '),
-      source: 'backend-ml-analysis',
-    }))
-    : []
+  const liveAlerts = getAnalysisFindings(liveAnalysis)
   const isLive = appMode === 'live'
   const readings = isLive ? liveReadings : snapshot.readings
   const alerts = isLive ? liveAlerts : demoEvaluation.alerts
@@ -1068,7 +1164,7 @@ function App() {
       active = false
       controller.abort()
     }
-  }, [isLive])
+  }, [isLive, liveRefreshVersion])
 
   useEffect(() => {
     if (!isLive || !astronaut || !syntheticAstronauts.some((profile) => profile.astronaut_id === astronaut)) return undefined
@@ -1091,21 +1187,17 @@ function App() {
       active = false
       controller.abort()
     }
-  }, [isLive, astronaut, syntheticAstronauts, requestAssistant])
-
-  useEffect(() => () => cancelPendingAnalysis(), [cancelPendingAnalysis])
+  }, [isLive, astronaut, syntheticAstronauts, requestAssistant, liveRefreshVersion])
 
   useEffect(() => {
-    const timer = window.setInterval(() => setMissionSeconds((time) => time + 1), 1000)
-    return () => window.clearInterval(timer)
+    if (!window.matchMedia) return undefined
+    const mediaQuery = window.matchMedia('(max-width: 690px)')
+    const updateViewport = (event) => setIsMobileViewport(event.matches)
+    mediaQuery.addEventListener?.('change', updateViewport)
+    return () => mediaQuery.removeEventListener?.('change', updateViewport)
   }, [])
 
-  const missionTime = useMemo(() => {
-    const hours = Math.floor(missionSeconds / 3600)
-    const minutes = Math.floor((missionSeconds % 3600) / 60)
-    const seconds = missionSeconds % 60
-    return `T+${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
-  }, [missionSeconds])
+  useEffect(() => () => cancelPendingAnalysis(), [cancelPendingAnalysis])
 
   const resetCamera = () => {
     setSelectedRegion(null)
@@ -1114,6 +1206,7 @@ function App() {
 
   const selectRegion = (region) => {
     setSelectedRegion(region && focusPoints[region] ? region : null)
+    if (isMobileViewport && mobileDetailsOpen) setMobileDetailsOpen(false)
   }
 
   const updateThreshold = (key, direction, level, inputValue) => {
@@ -1187,6 +1280,18 @@ function App() {
     }
   }
 
+  const retryLiveConnection = () => {
+    if (!isLive) return
+    setLiveStatus('loading')
+    setLiveError('')
+    setLiveDashboard(null)
+    setSyntheticAstronauts([])
+    setAstronaut('')
+    setLiveRefreshVersion((version) => version + 1)
+  }
+
+  const closeMobileDetails = useCallback(() => setMobileDetailsOpen(false), [])
+
   const handleRunAnalysis = async () => {
     if (!astronaut || !liveDashboard?.source) return
     cancelPendingAnalysis()
@@ -1222,7 +1327,6 @@ function App() {
       <Header
         astronaut={astronaut}
         setAstronaut={changeAstronaut}
-        missionTime={missionTime}
         hasAlerts={alerts.length > 0}
         live={isLive}
         astronauts={syntheticAstronauts}
@@ -1244,25 +1348,28 @@ function App() {
           liveStatus={liveStatus}
           liveError={liveError}
           liveTimestamp={liveDashboard?.timestamp}
+          onRetryLive={retryLiveConnection}
           onRunAnalysis={handleRunAnalysis}
           analysisLoading={analysisLoading}
         />
         <section className="hologram-stage" aria-label="Interactive 3D astronaut digital twin">
           <button
             type="button"
+            ref={mobileDetailsTriggerRef}
             className="mobile-details-toggle"
             onClick={() => setMobileDetailsOpen((open) => !open)}
             aria-expanded={mobileDetailsOpen}
             aria-controls="region-details-panel"
+            aria-label={mobileDetailsOpen ? 'Close region details' : 'Open region details'}
           >
             {mobileDetailsOpen ? 'CLOSE DETAILS' : 'REGION DETAILS'}
           </button>
           <div className="stage-header">
-            <span><i /> DIGITAL TWIN <b>/</b> {modelStatus === 'ready' ? 'ANATOMY MODEL' : 'SCHEMATIC FALLBACK'}</span>
+            <span><i /> ANATOMY VIEW <b>/</b> SYNTHETIC EDUCATIONAL DEMO</span>
             {labels && selectedRegion && (
               <span className="stage-focus-label">FOCUS / {REGIONS[selectedRegion].shortName}</span>
             )}
-            <span className="stage-coordinates">X 00.00 <b>Y</b> 01.84 <b>Z</b> 00.00</span>
+            <span className="stage-coordinates">LAYER / {layer.toUpperCase()}</span>
           </div>
           <div className="stage-corner corner-tl" />
           <div className="stage-corner corner-tr" />
@@ -1271,14 +1378,6 @@ function App() {
           <div className="stage-grid" />
           <div className="scanline-overlay" />
           <div className="vertical-guide" />
-          <div className="stage-readout stage-readout-left">
-            <span>PROJECTION MATRIX</span><b>ACTIVE</b>
-            <i /><span>DEPTH MAPPING</span><b>12.8 CM</b>
-          </div>
-          <div className="stage-readout stage-readout-right">
-            <span>MODEL STATUS</span><b>{modelStatus === 'ready' ? 'GLB ONLINE' : modelStatus === 'error' ? 'LOAD ERROR' : modelStatus === 'missing' ? 'ASSET MISSING' : 'LOADING'}</b>
-            <i /><span>LAST SYNC</span><b>00:00:14</b>
-          </div>
           <div className="scene-wrap">
             <DigitalHuman
               mode={mode}
@@ -1291,12 +1390,14 @@ function App() {
               onSelect={selectRegion}
               onModelStatusChange={setModelStatus}
               onModelInfo={setModelInfo}
+              retryModelKey={modelRetryKey}
+              reducedMotion={reducedMotion}
             />
           </div>
           <div className="stage-footer">
             <span><i /> {modelStatus === 'ready' ? 'ANATOMY GLB' : 'SCHEMATIC ONLY'}</span>
             <span>{selectedRegion ? REGIONS[selectedRegion].code : 'FULL BODY VIEW'}</span>
-            <span>WEBGL <b>●</b></span>
+            <span>REGION DATA <b>NOT LOCALIZED</b></span>
             <a
               className="model-attribution"
               href="https://github.com/MervinR07/open-anatomy-3d"
@@ -1321,7 +1422,7 @@ function App() {
             focusPoints={focusPoints}
             onSelectRegion={selectRegion}
           />
-          <div className={`model-note model-status-${modelStatus}`}>
+          <div className={`model-note model-status-${modelStatus}`} role="status" aria-live="polite">
             {modelStatus === 'ready' ? <Check size={11} /> : <AlertTriangle size={11} />}
             {modelStatus === 'ready'
               ? 'ANATOMY GLB LOADED · SELECT A NAMED REGION'
@@ -1331,7 +1432,20 @@ function App() {
                   ? 'MODEL LOAD FAILED · NON-ANATOMICAL SCHEMATIC SHOWN'
                   : 'MODEL FILE MISSING · NON-ANATOMICAL SCHEMATIC SHOWN'}
           </div>
+          {(modelStatus === 'error' || modelStatus === 'missing') && (
+            <button type="button" className="model-retry-floating" onClick={() => setModelRetryKey((key) => key + 1)}>
+              RETRY MODEL LOAD
+            </button>
+          )}
         </section>
+        {isMobileViewport && mobileDetailsOpen && (
+          <button
+            type="button"
+            className="mobile-drawer-backdrop"
+            aria-label="Close region details"
+            onClick={closeMobileDetails}
+          />
+        )}
         <RightHud
           selected={selectedRegion}
           readings={readings}
@@ -1340,7 +1454,9 @@ function App() {
           onSelectRegion={selectRegion}
           updatedAt={updatedAt}
           mobileOpen={mobileDetailsOpen}
-          onClose={() => setMobileDetailsOpen(false)}
+          onClose={closeMobileDetails}
+          mobileView={isMobileViewport}
+          triggerRef={mobileDetailsTriggerRef}
           live={isLive}
           analysis={liveAnalysis}
           assistant={assistant}
@@ -1348,9 +1464,15 @@ function App() {
         />
       </div>
       <footer className="bottom-status">
-        <div className="footer-left"><span className="footer-shield"><Shield size={13} /></span><span><b>AEGIS PROTOTYPE</b> <i>·</i> FLIGHT HEALTH SYSTEMS</span></div>
-        <div className="footer-center"><span>DATA LINK</span><b><i /> SIMULATED</b><span className="footer-divider" /><span>UPLINK LATENCY</span><b>42 MS</b><span className="footer-divider" /><span>DATA SOURCE</span><b>GENERATED FEED</b></div>
-        <div className="footer-right"><span>V 0.1.0</span><span className="footer-divider" /><span>NASA SPACE APPS 2026</span></div>
+        <div className="footer-left"><span className="footer-shield"><Shield size={13} /></span><span><b>AEGIS PROTOTYPE</b> <i>·</i> SYNTHETIC EDUCATIONAL PROTOTYPE</span></div>
+        <div className="footer-center">
+          <span>MODE</span><b>{isLive ? 'LIVE API' : 'DEMO'}</b>
+          <span className="footer-divider" />
+          <span>DATA SOURCE</span><b>SYNTHETIC</b>
+          <span className="footer-divider" />
+          <span>ANALYSIS</span><b>{isLive ? getAnalysisStatusLabel(liveAnalysis) : 'THRESHOLD DEMO'}</b>
+        </div>
+        <div className="footer-right"><span>PROTOTYPE</span><span className="footer-divider" /><span>NASA SPACE APPS 2026</span></div>
       </footer>
     </main>
   )

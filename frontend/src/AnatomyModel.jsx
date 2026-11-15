@@ -227,7 +227,7 @@ function FallbackSilhouette() {
   )
 }
 
-function LoadedModel({ scene, mode, layer, selected, regionStatuses, onSelect, onModelInfo }) {
+function LoadedModel({ scene, mode, layer, selected, regionStatuses, onSelect, onModelInfo, reducedMotion }) {
   const model = useMemo(() => getCloneModel(scene), [scene])
   const criticalMaterials = useRef([])
 
@@ -236,6 +236,7 @@ function LoadedModel({ scene, mode, layer, selected, regionStatuses, onSelect, o
   }, [model, mode, regionStatuses, selected, layer])
 
   useFrame(({ clock }) => {
+    if (reducedMotion) return
     const pulse = 0.82 + Math.sin(clock.elapsedTime * 5) * 0.18
     criticalMaterials.current.forEach((material) => {
       material.emissiveIntensity = material.userData.aegisAlertIntensity * pulse
@@ -284,6 +285,7 @@ export default function AnatomyModel({
   onSelect,
   onStatusChange,
   onModelInfo,
+  reducedMotion = false,
 }) {
   const [asset, setAsset] = useState(null)
   const [status, setStatus] = useState('loading')
@@ -326,6 +328,7 @@ export default function AnatomyModel({
           regionStatuses={regionStatuses}
           onSelect={onSelect}
           onModelInfo={onModelInfo}
+          reducedMotion={reducedMotion}
         />
       ) : (
         <FallbackSilhouette />
