@@ -63,6 +63,8 @@ class Settings:
     openai_base_url: str = os.getenv(
         "OPENAI_BASE_URL", os.getenv("LLM_BASE_URL", "https://api.openai.com/v1")
     ).strip()
+    gemini_api_key: str = os.getenv("GEMINI_API_KEY", "").strip()
+    gemini_model: str = os.getenv("GEMINI_MODEL", "gemini-2.5-flash").strip()
     llm_timeout_seconds: int = _get_int_env("LLM_TIMEOUT_SECONDS", 60)
     llm_max_output_tokens: int = _get_int_env("LLM_MAX_OUTPUT_TOKENS", 600)
     llm_max_retries: int = _get_int_env("LLM_MAX_RETRIES", 1)

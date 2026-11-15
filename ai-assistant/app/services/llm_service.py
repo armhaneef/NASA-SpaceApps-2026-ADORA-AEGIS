@@ -6,7 +6,7 @@ from app.core.config import settings
 
 
 DEFAULT_OPENAI_CHAT_COMPLETIONS_URL = "https://api.openai.com/v1/chat/completions"
-SUPPORTED_PROVIDERS = {"offline", "none", "openai", "openai_compatible", "ollama"}
+SUPPORTED_PROVIDERS = {"offline", "none", "openai", "gemini", "openai_compatible", "ollama"}
 
 
 class LLMCallError(RuntimeError):
@@ -22,7 +22,11 @@ class LLMService:
 
     def __init__(self, provider: str | None = None) -> None:
         self.provider = (provider or settings.llm_provider).strip().lower()
-        if self.provider == "openai":
+        if self.provider == "gemini":
+            self.model = (getattr(settings, "gemini_model", None) or "gemini-2.5-flash").strip()
+            self.api_key = (getattr(settings, "gemini_api_key", None) or "").strip()
+            self.base_url = ""
+        elif self.provider == "openai":
             self.model = (getattr(settings, "openai_model", None) or settings.llm_model or "").strip()
             self.api_key = (
                 getattr(settings, "openai_api_key", None) or settings.llm_api_key or ""
@@ -42,6 +46,8 @@ class LLMService:
         self.max_retries = min(max(getattr(settings, "llm_max_retries", 1), 0), 2)
         if self.provider in {"offline", "none"}:
             self.offline = True
+        elif self.provider == "gemini":
+            self.offline = not self.model or not self.api_key
         elif self.provider == "ollama":
             self.base_url = configured_base_url.rstrip("/") or "http://localhost:11434"
             self.offline = not self.model
@@ -51,7 +57,7 @@ class LLMService:
             self.offline = False
 
     def is_available(self) -> bool:
-        return self.provider in {"openai", "openai_compatible", "ollama"} and not self.offline
+        return self.provider in {"openai", "gemini", "openai_compatible", "ollama"} and not self.offline
 
     def generate(self, prompt: str, *, system_prompt: str | None = None, temperature: float = 0.2) -> str:
         if self.provider not in SUPPORTED_PROVIDERS:
@@ -67,7 +73,69 @@ class LLMService:
         if self.provider == "openai":
             return self._responses_call(prompt, system_prompt=system_prompt, temperature=temperature)
 
+        if self.provider == "gemini":
+            return self._gemini_call(prompt, system_prompt=system_prompt, temperature=temperature)
+
         return self._openai_compatible_call(prompt, system_prompt=system_prompt, temperature=temperature)
+
+    def _gemini_call(
+        self,
+        prompt: str,
+        *,
+        system_prompt: str | None = None,
+        temperature: float = 0.2,
+    ) -> str:
+        """Call Gemini Developer API through Google's official Gen AI SDK."""
+        try:
+            from google import genai
+            from google.genai import types
+        except ImportError as exc:
+            raise LLMCallError(
+                "The official Google Gen AI SDK is not installed. Install requirements.txt before enabling the gemini provider."
+            ) from exc
+
+        try:
+            client = genai.Client(
+                api_key=self.api_key,
+                http_options=types.HttpOptions(timeout=int(self.timeout * 1000)),
+            )
+        except Exception as exc:
+            raise LLMCallError("The Gemini client could not be initialized.") from exc
+
+        try:
+            with client:
+                response = client.models.generate_content(
+                    model=self.model,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        system_instruction=system_prompt
+                        or "You are a cautious, evidence-grounded astronaut health assistant.",
+                        temperature=temperature,
+                        max_output_tokens=self.max_output_tokens,
+                    ),
+                )
+            answer = getattr(response, "text", None)
+            if not isinstance(answer, str) or not answer.strip():
+                raise LLMCallError("The Gemini API returned an empty answer.")
+            return answer.strip()
+        except LLMCallError:
+            raise
+        except Exception as exc:
+            status_code = getattr(exc, "code", None)
+            if not isinstance(status_code, int):
+                status_code = getattr(exc, "status_code", None)
+            if isinstance(status_code, int) and status_code in {
+                400, 401, 403, 404, 408, 429, 500, 502, 503, 504,
+            }:
+                raise LLMCallError(
+                    f"Gemini API returned HTTP {status_code}.", status_code=status_code
+                ) from exc
+            class_name = exc.__class__.__name__
+            if "timeout" in class_name.lower():
+                raise LLMCallError("Gemini API request timed out.") from exc
+            if "connection" in class_name.lower():
+                raise LLMCallError("Gemini API connection failed.") from exc
+            raise LLMCallError("Gemini API request failed.") from exc
 
     @staticmethod
     def _normalise_openai_base_url(value: str) -> str:
