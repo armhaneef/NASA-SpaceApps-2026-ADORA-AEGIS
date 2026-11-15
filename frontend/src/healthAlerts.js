@@ -1,3 +1,5 @@
+import { ORGAN_STRUCTURES } from './anatomyRegions.js'
+
 export const HEALTH_BASELINE = Object.freeze({
   heart_rate_bpm: 72,
   spo2_percent: 98,
@@ -9,6 +11,7 @@ export const HEALTH_SEVERITY_COLORS = Object.freeze({
   normal: '#00D5F2',
   warning: '#FFD43B',
   critical: '#FF4757',
+  'no-data': '#8499A0',
 })
 
 export const DEMO_THRESHOLDS = Object.freeze({
@@ -118,6 +121,7 @@ const REGION_KEYS = [
   'rightArm',
   'leftLeg',
   'rightLeg',
+  ...Object.keys(ORGAN_STRUCTURES),
 ]
 
 const MEASUREMENT_RULES = [

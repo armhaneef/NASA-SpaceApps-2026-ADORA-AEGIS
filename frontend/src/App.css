@@ -2911,6 +2911,99 @@ a:focus-visible {
   letter-spacing: 0.06em;
 }
 
+.anatomy-alert-summary {
+  flex-basis: 100%;
+  justify-content: center;
+  flex-wrap: wrap;
+  white-space: normal;
+  line-height: 1.5;
+}
+
+.anatomy-alert-summary.status-critical i,
+.layer-severity-dot.severity-critical {
+  background: #ff4757;
+  box-shadow: 0 0 6px rgba(255, 71, 87, 0.6);
+}
+
+.anatomy-alert-summary.status-warning i,
+.layer-severity-dot.severity-warning {
+  background: #ffd43b;
+  box-shadow: 0 0 6px rgba(255, 212, 59, 0.5);
+}
+
+.layer-controls .layer-severity-dot {
+  width: 5px;
+  height: 5px;
+  flex: none;
+  margin-left: 3px;
+  border-radius: 50%;
+}
+
+.anatomy-context-note {
+  position: absolute;
+  z-index: 4;
+  top: 76px;
+  right: 18px;
+  left: 18px;
+  margin: 0;
+  color: #8bb5c0;
+  font: 8px/1.6 var(--mono);
+  letter-spacing: 0.03em;
+  text-align: center;
+  pointer-events: none;
+}
+
+.regional-provenance {
+  display: grid;
+  gap: 7px;
+  margin: 10px 0;
+  color: #bdd4da;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.regional-provenance div { display: grid; gap: 2px; }
+.regional-provenance dt { color: #83a4ad; font: 9px var(--mono); text-transform: uppercase; }
+.regional-provenance dd { margin: 0; overflow-wrap: anywhere; }
+
+.regional-marker-editor {
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid rgba(103, 179, 194, 0.2);
+  border-radius: 7px;
+  color: #a7c4cd;
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.regional-marker-editor summary { cursor: pointer; font: 9px/1.5 var(--mono); }
+.regional-marker-editor > div { display: flex; flex-wrap: wrap; gap: 6px; }
+.regional-marker-editor button {
+  min-height: 36px;
+  padding: 6px 8px;
+  border: 1px solid rgba(103, 179, 194, 0.3);
+  border-radius: 5px;
+  background: #09202a;
+  font: 9px var(--mono);
+  cursor: pointer;
+}
+.regional-marker-editor button:disabled { opacity: 0.4; cursor: default; }
+
+/* Keep camera framing stable when the selected region adds detail text. */
+@media (min-width: 981px) {
+  .hologram-stage {
+    height: clamp(720px, calc(100dvh - 142px), 1050px);
+    align-self: start;
+  }
+}
+
+@media (max-width: 690px) {
+  .anatomy-context-note { top: 130px; font-size: 9px; }
+  .anatomy-alert-summary { grid-column: 1 / -1; font-size: 9px; }
+  .regional-provenance { font-size: 13px; }
+  .regional-marker-editor button { min-height: 44px; }
+}
+
 .finding-source {
   display: block;
   margin-top: 4px;

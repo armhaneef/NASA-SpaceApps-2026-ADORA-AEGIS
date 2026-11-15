@@ -3,6 +3,8 @@ import { Canvas, useFrame } from '@react-three/fiber'
 import { OrbitControls, Sparkles } from '@react-three/drei'
 import * as THREE from 'three'
 import AnatomyModel from './AnatomyModel.jsx'
+import { getLocalizedFindings, getSelectionStatus, ORGAN_STRUCTURES } from './anatomyRegions.js'
+import { getFocusDistance, getLayerAlertIndicators } from './anatomyScene.js'
 import {
   createDemoSnapshot,
   DEMO_SCENARIOS,
@@ -76,7 +78,7 @@ const REGIONS = {
       'The brain meshes are shown for education only. This prototype does not measure brain activity or provide a neurological assessment.',
   },
   heart: {
-    name: 'Cardiovascular',
+    name: 'Heart',
     shortName: 'HEART',
     code: 'ANATOMY-02',
     description: 'Educational heart view with general simulated vital-sign context.',
@@ -135,6 +137,7 @@ const REGIONS = {
     description: 'Grouped right-side leg structures identified by their mesh names.',
     explanation: 'The selected leg meshes are anatomical context only. No leg-specific health measurements are available in this prototype.',
   },
+  ...ORGAN_STRUCTURES,
 }
 
 const METRIC_DEFINITIONS = [
@@ -312,13 +315,20 @@ function ScanBeam({ active }) {
   )
 }
 
-function CameraFocus({ controlsRef, selected, focusPoints, reducedMotion }) {
+function CameraFocus({ controlsRef, selected, focusPoints, focusRadii, reducedMotion }) {
   const focusTarget = useRef(new THREE.Vector3(0, 0, 0))
   const previousSelection = useRef(selected)
   const transitionDistance = useRef(5.8)
   const isTransitioning = useRef(false)
 
-  useFrame((_, delta) => {
+  useEffect(() => {
+    const controls = controlsRef.current
+    const stopTransition = () => { isTransitioning.current = false }
+    controls?.addEventListener('start', stopTransition)
+    return () => controls?.removeEventListener('start', stopTransition)
+  }, [controlsRef])
+
+  useFrame(({ camera }, delta) => {
     const controls = controlsRef.current
     if (!controls) return
 
@@ -326,19 +336,8 @@ function CameraFocus({ controlsRef, selected, focusPoints, reducedMotion }) {
       previousSelection.current = selected
       const point = focusPoints[selected]
       focusTarget.current.fromArray(point ?? [0, 0, 0])
-      const regionDistance = {
-        brain: 3.2,
-        head: 3.35,
-        heart: 3.35,
-        leftLung: 3.45,
-        rightLung: 3.45,
-        abdomen: 3.55,
-        leftArm: 3.65,
-        rightArm: 3.65,
-        leftLeg: 3.75,
-        rightLeg: 3.75,
-      }
-      transitionDistance.current = selected && point ? regionDistance[selected] ?? 3.5 : 5.8
+      transitionDistance.current = selected && point
+        ? getFocusDistance(focusRadii[selected], camera.aspect, camera.fov) : 5.8
       isTransitioning.current = true
     }
 
@@ -383,17 +382,20 @@ function DigitalHuman({
   regionStatuses,
   controlsRef,
   focusPoints,
+  focusRadii,
   onSelect,
   onModelStatusChange,
   onModelInfo,
   retryModelKey,
   reducedMotion,
+  isDemo,
+  mobile,
 }) {
   return (
     <Canvas
       frameloop={reducedMotion ? 'demand' : 'always'}
       camera={{ position: [0, 0.02, 5.8], fov: 40, near: 0.1, far: 100 }}
-      dpr={[1, 1.5]}
+      dpr={mobile ? 1 : [1, 1.5]}
       gl={{ antialias: true, alpha: true }}
       onPointerMissed={() => onSelect(null)}
       aria-label="Interactive 3D anatomy. Use the region selector to navigate without a pointer."
@@ -428,17 +430,18 @@ function DigitalHuman({
         onStatusChange={onModelStatusChange}
         onModelInfo={onModelInfo}
         reducedMotion={reducedMotion}
+        isDemo={isDemo}
       />
       <ProjectionPlatform animate={!reducedMotion} />
       <ScanBeam active={scan && !reducedMotion} />
-      <CameraFocus controlsRef={controlsRef} selected={selected} focusPoints={focusPoints} reducedMotion={reducedMotion} />
+      <CameraFocus controlsRef={controlsRef} selected={selected} focusPoints={focusPoints} focusRadii={focusRadii} reducedMotion={reducedMotion} />
       <OrbitControls
         ref={controlsRef}
         makeDefault
         enablePan
-        enableDamping
+        enableDamping={!reducedMotion}
         dampingFactor={0.08}
-        minDistance={1.7}
+        minDistance={0.85}
         maxDistance={9}
         minPolarAngle={Math.PI * 0.29}
         maxPolarAngle={Math.PI * 0.68}
@@ -695,6 +698,26 @@ function LeftHud({
   )
 }
 
+function getDrawerTabStops(panel) {
+  if (!panel) return []
+  return [...panel.querySelectorAll('button, select, input, textarea, a[href], area[href], summary, iframe, [tabindex], [contenteditable="true"], audio[controls], video[controls]')]
+    .filter((element) => {
+      if (element.tabIndex < 0 || element.matches(':disabled, input[type="hidden"]')
+        || element.closest('[hidden], [inert], [aria-hidden="true"], [aria-disabled="true"]')) return false
+      const style = window.getComputedStyle(element)
+      if (!element.getClientRects().length || ['hidden', 'collapse'].includes(style.visibility)) return false
+      // Closed details can still report layout boxes for their hidden controls.
+      for (let parent = element.parentElement; parent && parent !== panel; parent = parent.parentElement) {
+        if (parent.tagName === 'DETAILS' && !parent.open) {
+          const summary = [...parent.children].find((child) => child.tagName === 'SUMMARY')
+          if (!summary?.contains(element)) return false
+        }
+      }
+      return true
+    })
+    .sort((a, b) => (a.tabIndex || Infinity) - (b.tabIndex || Infinity))
+}
+
 function RightHud({
   selected,
   astronaut,
@@ -718,19 +741,33 @@ function RightHud({
   chatDraft,
   onChatDraftChange,
   onChatSubmit,
+  scenarioLabel,
+  modelInfo,
+  layer,
+  onSetMarker,
+  onClearMarker,
+  customMarkers,
 }) {
   const panelRef = useRef(null)
-  const wasOpen = useRef(false)
   const region = selected ? REGIONS[selected] : null
 
   useEffect(() => {
-    if (!mobileView) {
-      wasOpen.current = mobileOpen
-      return
+    if (!mobileView || !mobileOpen) return undefined
+    const panel = panelRef.current
+    const trigger = triggerRef.current
+    const previousFocus = document.activeElement
+    const opener = previousFocus instanceof HTMLElement && previousFocus !== document.body
+      && !panel?.contains(previousFocus) ? previousFocus : trigger
+    const keepFocusInside = (event) => {
+      if (!panel?.contains(event.target)) panel?.focus()
     }
-    if (mobileOpen) panelRef.current?.focus()
-    else if (wasOpen.current) triggerRef.current?.focus()
-    wasOpen.current = mobileOpen
+    panel?.focus()
+    document.addEventListener('focusin', keepFocusInside)
+    return () => {
+      document.removeEventListener('focusin', keepFocusInside)
+      const restoreTarget = opener?.isConnected ? opener : trigger
+      restoreTarget?.focus()
+    }
   }, [mobileOpen, mobileView, triggerRef])
 
   useEffect(() => {
@@ -744,23 +781,17 @@ function RightHud({
 
   const trapDrawerTab = (event) => {
     if (event.key !== 'Tab' || !mobileView || !mobileOpen) return
-    const focusable = panelRef.current?.querySelectorAll(
-      'button:not(:disabled), select:not(:disabled), input:not(:disabled), textarea:not(:disabled), a[href], [tabindex]:not([tabindex="-1"])',
-    )
-    if (!focusable?.length) return
-    const first = focusable[0]
-    const last = focusable[focusable.length - 1]
-    if (document.activeElement === panelRef.current) {
-      event.preventDefault()
-      const target = event.shiftKey ? last : first
-      target.focus()
-    } else if (event.shiftKey && document.activeElement === first) {
-      event.preventDefault()
-      last.focus()
-    } else if (!event.shiftKey && document.activeElement === last) {
-      event.preventDefault()
-      first.focus()
+    const focusable = getDrawerTabStops(panelRef.current)
+    event.preventDefault()
+    if (!focusable.length) {
+      panelRef.current?.focus()
+      return
     }
+    const currentIndex = focusable.indexOf(document.activeElement)
+    const nextIndex = currentIndex < 0
+      ? event.shiftKey ? focusable.length - 1 : 0
+      : (currentIndex + (event.shiftKey ? -1 : 1) + focusable.length) % focusable.length
+    focusable[nextIndex].focus()
   }
   const demoStatus = alerts.some((alert) => alert.severity === 'critical')
     ? 'critical'
@@ -768,12 +799,15 @@ function RightHud({
       ? 'warning'
       : 'normal'
   const status = selected
-    ? regionStatuses[selected]
+    ? getSelectionStatus(regionStatuses, selected)
     : live ? getAnalysisStatusTone(analysis) : demoStatus
   const statusLabel = selected
     ? status.toUpperCase()
     : live ? getAnalysisStatusLabel(analysis) : alerts.length ? status.toUpperCase() : 'NO ACTIVE ALERTS'
-  const regionalAlerts = alerts.filter((alert) => alert.region === selected)
+  const regionalAlerts = selected ? getLocalizedFindings(alerts, selected) : alerts.filter((alert) => alert.region == null)
+  const meshAvailable = Boolean(modelInfo.focusPoints?.[selected])
+  const selectionInLayer = layer === 'full' || modelInfo.layerCoverage?.[layer]?.includes(selected)
+    || (['head', 'brain'].includes(selected) && meshAvailable)
   const visibleAlerts = alerts
   const indicators = live
     ? selected
@@ -860,6 +894,16 @@ function RightHud({
           <span>{selected ? 'REGION HEALTH STATUS' : live ? 'OVERALL API ANALYSIS' : 'OVERALL DEMO STATUS'}</span>
           <b>{statusLabel}</b>
         </div>
+        {selected && (
+          <dl className="regional-provenance">
+            <div><dt>Region</dt><dd>{region.name}</dd></div>
+            <div><dt>Scenario</dt><dd>{live ? 'LIVE API · synthetic inputs' : scenarioLabel}</dd></div>
+            <div><dt>Regional sensor</dt><dd>None supplied · no direct measurement</dd></div>
+            <div><dt>Source</dt><dd>{regionalAlerts.length ? 'Synthetic demonstration · explicit localized marker' : 'Anatomical reference only'}</dd></div>
+            <div><dt>Mesh</dt><dd>{!meshAvailable ? 'Unavailable in this asset; a licensed, aligned mesh is required.'
+              : selectionInLayer ? 'Available in the current view' : 'Hidden in this layer; select FULL BODY or ORGANS for an organ.'}</dd></div>
+          </dl>
+        )}
         <div className="region-detail-section">
           <span>{live ? 'GLOBAL ANALYSIS FINDINGS' : 'SIMULATED FINDINGS'}</span>
           {regionalAlerts.length ? (
@@ -880,6 +924,11 @@ function RightHud({
           )}
         </div>
         <div className="region-detail-section">
+          <span>LIMITATIONS</span>
+          <p>{region?.explanation ?? 'Only explicit localized synthetic markers color anatomy. Global vital signs are not localized.'}</p>
+          <p>{live ? 'Grey means no regional sensor data.' : 'Cyan is an unmarked synthetic reference, not evidence of normal regional health.'} No clinical diagnosis is implied.</p>
+        </div>
+        <div className="region-detail-section">
           <span>TREND / SUGGESTED NEXT STEP</span>
           <p>
             {live
@@ -897,6 +946,17 @@ function RightHud({
           })}
         </div>
       </section>
+      {!live && selected && meshAvailable && (
+        <details className="regional-marker-editor">
+          <summary>ADD AN EXPLICIT SYNTHETIC MARKER</summary>
+          <p>Visualization only · no sensor or diagnosis. Scenario changes reset added markers.</p>
+          <div>
+            <button type="button" onClick={() => onSetMarker(selected, 'warning')}>MARK WARNING</button>
+            <button type="button" onClick={() => onSetMarker(selected, 'critical')}>MARK CRITICAL</button>
+            <button type="button" onClick={() => onClearMarker(selected)} disabled={!customMarkers.some((marker) => marker.region === selected)}>CLEAR ADDED MARKER</button>
+          </div>
+        </details>
+      )}
       <div className={`ml-status demo-rule-status status-${status}`}>
         <div className="ml-icon"><Activity size={17} /></div>
         <div className="ml-copy">
@@ -1051,10 +1111,17 @@ function ViewControls({
   selected,
   focusPoints,
   onSelectRegion,
+  layerIndicators,
+  alerts,
 }) {
+  const localized = alerts.filter((alert) => alert.source === 'demo-region-simulation')
+  const overall = localized.some((alert) => alert.severity === 'critical') ? 'critical' : localized.length ? 'warning' : 'normal'
   return (
     <div className="view-controls">
-      <div className="view-control-label"><span>HOLOGRAM VIEW</span><i /></div>
+      <div className={`view-control-label anatomy-alert-summary status-${overall}`} role="status" aria-live="polite">
+        <span>HOLOGRAM VIEW</span><i />
+        <span>{localized.length ? `${localized.length} LOCALIZED MARKER${localized.length === 1 ? '' : 'S'}` : 'NO LOCALIZED MARKERS'} · {alerts.length - localized.length} GLOBAL</span>
+      </div>
       <div className="control-group camera-controls" role="group" aria-label="3D camera controls">
         <button type="button" onClick={resetCamera} title="Reset camera" aria-label="Reset camera"><RotateCcw size={14} /><span>RESET</span></button>
         <i />
@@ -1091,9 +1158,11 @@ function ViewControls({
             type="button"
             className={layer === value ? 'control-active' : ''}
             aria-pressed={layer === value}
+            title={layerIndicators[value] ? `${label}: ${layerIndicators[value]} synthetic marker on available meshes` : `${label}: no localized marker on available meshes`}
             onClick={() => setLayer(value)}
           >
             {label}
+            {layerIndicators[value] && <i className={`layer-severity-dot severity-${layerIndicators[value]}`} aria-hidden="true" />}
           </button>
         ))}
       </div>
@@ -1115,7 +1184,7 @@ function ViewControls({
           <option value="">FULL BODY</option>
           {Object.entries(REGIONS).map(([key, region]) => (
             <option key={key} value={key} disabled={!focusPoints[key]}>
-              {region.shortName}
+              {region.shortName}{!focusPoints[key] ? ' · UNAVAILABLE' : ''}
             </option>
           ))}
         </select>
@@ -1130,6 +1199,7 @@ function App() {
   const [selectedRegion, setSelectedRegion] = useState(null)
   const [modelInfo, setModelInfo] = useState({})
   const [scenarioId, setScenarioId] = useState('normal')
+  const [customMarkersByAstronaut, setCustomMarkersByAstronaut] = useState(() => new Map())
   const [thresholds, setThresholds] = useState(DEMO_THRESHOLDS)
   const [mode, setMode] = useState('outer')
   const [layer, setLayer] = useState('full')
@@ -1143,6 +1213,10 @@ function App() {
   ))
   const [activeMetric, setActiveMetric] = useState(0)
   const [astronaut, setAstronaut] = useState('A-01')
+  const customMarkers = useMemo(
+    () => customMarkersByAstronaut.get(astronaut) ?? [],
+    [customMarkersByAstronaut, astronaut],
+  )
   const [syntheticAstronauts, setSyntheticAstronauts] = useState([])
   const [liveDashboard, setLiveDashboard] = useState(null)
   const [liveStatus, setLiveStatus] = useState('idle')
@@ -1166,9 +1240,9 @@ function App() {
   const demoEvaluation = useMemo(
     () => evaluateSyntheticAlerts(snapshot.readings, {
       thresholds,
-      regionAlerts: snapshot.regionAlerts,
+      regionAlerts: [...snapshot.regionAlerts, ...customMarkers],
     }),
-    [snapshot, thresholds],
+    [snapshot, thresholds, customMarkers],
   )
   const emptyReadings = {
     heart_rate_bpm: null,
@@ -1198,6 +1272,16 @@ function App() {
   )
   const metrics = useMemo(() => getMetrics(readings, alerts, isLive), [readings, alerts, isLive])
   const focusPoints = modelInfo.focusPoints ?? {}
+  const focusRadii = modelInfo.focusRadii ?? {}
+  const layerIndicators = getLayerAlertIndicators(modelInfo.layerCoverage, regionStatuses)
+  const scenarioLabel = DEMO_SCENARIOS.find((scenario) => scenario.id === scenarioId)?.label ?? 'Unknown scenario'
+  const anatomyContextNote = modelStatus !== 'ready' ? 'Anatomical structures are unavailable until the model loads.'
+    : ['head', 'brain'].includes(selectedRegion)
+      ? modelInfo.meshNames?.includes('brain') ? 'VERIFIED BRAIN · ORIGINAL POSITION / SCALE · TRANSPARENT HEAD REFERENCE'
+        : 'BRAIN MESH UNAVAILABLE · HEAD REFERENCE ONLY'
+      : layer === 'muscles' ? 'HEAD: SKULL / JAW REFERENCE · NO FACE OR SCALP MUSCLE MESHES'
+        : layer === 'organs' ? 'NAMED ORGANS · TRANSLUCENT BODY REFERENCE · SELECT AN ORGAN'
+          : isLive ? 'GREY = NO REGIONAL SENSOR DATA' : 'CYAN = UNMARKED DEMO REFERENCE · NO REGIONAL SENSOR DATA'
 
   const cancelPendingAnalysis = useCallback(() => {
     analysisRequestRef.current.generation += 1
@@ -1378,6 +1462,11 @@ function App() {
 
   const changeScenario = (nextScenarioId) => {
     setScenarioId(nextScenarioId)
+    setCustomMarkersByAstronaut((current) => {
+      const next = new Map(current)
+      next.delete(astronaut)
+      return next
+    })
     setSelectedRegion(null)
     setUpdatedAt(new Date())
   }
@@ -1385,6 +1474,7 @@ function App() {
   const zoomCamera = (scale) => {
     const controls = controlsRef.current
     if (!controls) return
+    controls.dispatchEvent({ type: 'start' })
     const offset = controls.object.position.clone().sub(controls.target)
     const nextDistance = THREE.MathUtils.clamp(
       offset.length() * scale,
@@ -1448,6 +1538,31 @@ function App() {
   }
 
   const closeMobileDetails = useCallback(() => setMobileDetailsOpen(false), [])
+
+  const setRegionalMarker = (region, severity) => {
+    if (isLive || !astronaut || !focusPoints[region]) return
+    setCustomMarkersByAstronaut((current) => {
+      const next = new Map(current)
+      const markers = current.get(astronaut) ?? []
+      next.set(astronaut, [...markers.filter((marker) => marker.region !== region), {
+        id: `added-${astronaut}-${region}`, region, severity, scope: 'localized', source: 'demo-region-simulation',
+        reason: `Explicit simulated ${severity} marker for ${REGIONS[region].name}. Synthetic demonstration only; no regional sensor measurement or clinical diagnosis is implied.`,
+      }])
+      return next
+    })
+    setUpdatedAt(new Date())
+  }
+
+  const clearRegionalMarker = (region) => {
+    if (isLive || !astronaut) return
+    setCustomMarkersByAstronaut((current) => {
+      const next = new Map(current)
+      const markers = (current.get(astronaut) ?? []).filter((marker) => marker.region !== region)
+      if (markers.length) next.set(astronaut, markers)
+      else next.delete(astronaut)
+      return next
+    })
+  }
 
   const handleRunAnalysis = async () => {
     if (!astronaut || !liveDashboard?.source) return
@@ -1544,11 +1659,14 @@ function App() {
               regionStatuses={regionStatuses}
               controlsRef={controlsRef}
               focusPoints={focusPoints}
+              focusRadii={focusRadii}
               onSelect={selectRegion}
               onModelStatusChange={setModelStatus}
               onModelInfo={setModelInfo}
               retryModelKey={modelRetryKey}
               reducedMotion={reducedMotion}
+              isDemo={!isLive}
+              mobile={isMobileViewport}
             />
           </div>
           <div className="stage-footer">
@@ -1578,7 +1696,10 @@ function App() {
             selected={selectedRegion}
             focusPoints={focusPoints}
             onSelectRegion={selectRegion}
+            layerIndicators={layerIndicators}
+            alerts={alerts}
           />
+          <p className="anatomy-context-note">{anatomyContextNote}</p>
           <div className={`model-note model-status-${modelStatus}`} role="status" aria-live="polite">
             {modelStatus === 'ready' ? <Check size={11} /> : <AlertTriangle size={11} />}
             {modelStatus === 'ready'
@@ -1626,6 +1747,12 @@ function App() {
           chatDraft={chatDraft}
           onChatDraftChange={setChatDraft}
           onChatSubmit={submitChatQuestion}
+          scenarioLabel={scenarioLabel}
+          modelInfo={modelInfo}
+          layer={layer}
+          onSetMarker={setRegionalMarker}
+          onClearMarker={clearRegionalMarker}
+          customMarkers={customMarkers}
         />
       </div>
       <footer className="bottom-status">

@@ -25,14 +25,15 @@ test('health severity colors use the specified holographic palette', () => {
     normal: '#00D5F2',
     warning: '#FFD43B',
     critical: '#FF4757',
+    'no-data': '#8499A0',
   })
 })
 
 test('verified side-specific arm meshes map to their full arm regions', () => {
-  for (const mesh of ['shoulder_muscles_r', 'upper_arm_muscles_r', 'forearm_muscles_r', 'forearm_r', 'hand_muscles_r', 'hand_r', 'clavicle_r']) {
+  for (const mesh of ['deltoid_r', 'rotator_cuff_r', 'upper_arm_muscles_r', 'forearm_muscles_r', 'forearm_r', 'hand_muscles_r', 'hand_r', 'clavicle_r']) {
     assert.equal(getAnatomyRegion(mesh), 'rightArm', mesh)
   }
-  for (const mesh of ['shoulder_muscles_l', 'upper_arm_muscles_l', 'forearm_muscles_l', 'forearm_l', 'hand_muscles_l', 'hand_l', 'clavicle_l']) {
+  for (const mesh of ['deltoid_l', 'rotator_cuff_l', 'upper_arm_muscles_l', 'forearm_muscles_l', 'forearm_l', 'hand_muscles_l', 'hand_l', 'clavicle_l']) {
     assert.equal(getAnatomyRegion(mesh), 'leftArm', mesh)
   }
 })

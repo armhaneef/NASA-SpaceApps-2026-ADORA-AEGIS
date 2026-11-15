@@ -70,10 +70,10 @@ upstream `_l` / `_r` suffixes, not screen position.
 | Left lung | Verified | `lung_l` |
 | Right lung | Verified | `lung_r` |
 | Abdomen | Partial | No single abdomen mesh; grouped named structures include `liver`, `colon`, `small_intestine`, `stomach`, `appendix`, `gallbladder`, `spleen`, and `bladder` |
-| Left arm | Verified | Side-suffixed arm structures including `upper_arm_muscles_l`, `forearm_muscles_l`, and `forearm_l`; hand meshes are grouped separately |
-| Right arm | Verified | Side-suffixed arm structures including `upper_arm_muscles_r`, `forearm_muscles_r`, and `forearm_r`; hand meshes are grouped separately |
-| Left hand | Verified | `hand_muscles_l`, `hand_l` |
-| Right hand | Verified | `hand_muscles_r`, `hand_r` |
+| Left arm | Verified | Side-suffixed arm structures including `upper_arm_muscles_l`, `forearm_muscles_l`, `forearm_l`, `hand_muscles_l` and `hand_l` |
+| Right arm | Verified | Side-suffixed arm structures including `upper_arm_muscles_r`, `forearm_muscles_r`, `forearm_r`, `hand_muscles_r` and `hand_r` |
+| Left hand | Verified | `hand_muscles_l`, `hand_l`; included in left-arm selection |
+| Right hand | Verified | `hand_muscles_r`, `hand_r`; included in right-arm selection |
 | Left leg | Verified | Side-suffixed structures including `lower_leg_l`, `foot_l`, and `foot_muscles_l` |
 | Right leg | Verified | Side-suffixed structures including `lower_leg_r`, `foot_r`, and `foot_muscles_r` |
 
@@ -85,25 +85,24 @@ disabled rather than presented as selectable.
 
 ## Synthetic demo alert visualization
 
-The frontend provides six local scenarios: Normal, Heart alert, Respiratory
-alert, Left arm alert, Right arm alert, and Multiple alerts. Its configurable
+The frontend preserves ten local scenarios, including global vital alerts,
+localized limb markers, and multiple simultaneous markers. Its configurable
 demo thresholds compare heart rate, SpO₂, and respiration against the example
 baseline in `frontend/src/healthAlerts.js`. The UI threshold editor changes
 warning and critical deviation thresholds for these examples; these values
 are illustrative settings, not clinical limits.
 
-Heart-rate threshold events highlight the named heart mesh. General SpO₂ or
-respiration threshold events highlight both named lung meshes as a display
-convention; this does not localize a measurement to either lung. Arm and leg
-highlights are created only by explicit localized demo markers, never inferred
-from general vital signs. Active mapped regions can be selected from their
+Heart-rate, SpO₂ and respiration threshold events remain global and never
+highlight a heart, lung or limb. All anatomical highlights require explicit
+localized synthetic markers. Active mapped regions can be selected from their
 on-model marker or the anatomical-region selector. Warning/critical colors
 restore to the normal display when a scenario or threshold no longer produces
 an alert.
 
-These are frontend-only, threshold-based demonstrations. They are separate
-from ML predictions and backend outputs; no alert API, trained model, live
-sensor feed, clinical threshold, or diagnosis is represented.
+These regional markers are frontend-only demonstrations, separate from ML
+predictions and backend outputs. The existing LIVE API / ML integration remains
+available but supplies no localized regional measurements. No clinical
+threshold or diagnosis is represented.
 
 ## Loading, camera, and appearance
 
@@ -145,9 +144,26 @@ Verified for this integration:
   heart-mesh click, the left-arm/right-leg groups, wireframe/anatomy modes,
   zoom controls, reset, and preservation of the four existing biometric
   cards.
-- The Vite browser log also showed a Three.js `THREE.Clock` deprecation
-  warning and a React synchronous-root-unmount error during page initialization.
-  The GLB loaded and interactions continued to work; investigate these runtime
-  messages if they persist outside development reloads.
+- The older integration log recorded a `THREE.Clock` deprecation and a React
+  initialization error. Current layer QA records no uncaught JavaScript
+  exceptions; the dependency clock deprecation remains a warning.
 
 Repeat these checks after future changes to the asset or viewer.
+
+## Current layer and organ improvements
+
+See [the current layer QA report](anatomy-layer-improvements.md) and
+[complete named mesh inventory](anatomy-mesh-inventory.json). MUSCLES retains
+the real skull/jaw as transparent head references because dedicated face/scalp
+muscles are absent. ORGANS retains all 34 organ-group meshes and a non-pickable
+body outline. Individual organs now have measured focus points and named
+selection/details; brain components remain grouped as Brain. Selecting Head
+or Brain reveals the existing brain through transparent head structures.
+
+Layer dots describe only explicit markers on meshes actually available in
+that layer. A persistent localized/global summary remains visible even when
+the affected region is hidden by a layer. The details panel can add or clear
+explicit demonstration markers for a selected available structure; changing
+the scenario clears added markers and preserves all ten original scenarios.
+Cyan is an unmarked demo reference, not a regional health verdict. Grey is
+used for unknown regional data in LIVE API MODE.
