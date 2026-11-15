@@ -4,8 +4,8 @@ import json
 from collections.abc import Callable
 from copy import deepcopy
 from datetime import datetime, timezone
-from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
+
+import httpx
 
 from app.core.config import load_settings
 from app.schemas.assistant import AssistantProviderRequest, AssistantProviderResponse
@@ -39,6 +39,8 @@ class AIAdapter:
                 raw = self.provider(deepcopy(request.model_dump(mode="json")))
             except TimeoutError as exc:
                 raise AssistantTimeoutError("Assistant provider timed out; retry later") from exc
+            except AssistantResponseError:
+                raise
             except Exception as exc:
                 raise AssistantUnavailableError("Assistant provider failed; retry later") from exc
             try:
@@ -59,36 +61,35 @@ class AIAdapter:
         )
 
 
-def _member3_provider(base_url: str, timeout: float) -> Callable[[dict], dict]:
+def _member3_provider(endpoint: str, timeout: float) -> Callable[[dict], dict]:
     """Call Member 3's existing backend-compatible route over localhost HTTP."""
-    endpoint = f"{base_url.rstrip('/')}/api/v1/assistant/respond"
-
     def call(payload: dict) -> dict:
-        request = Request(
-            endpoint,
-            data=json.dumps(payload, allow_nan=False).encode("utf-8"),
-            method="POST",
-            headers={"Content-Type": "application/json"},
-        )
         try:
-            with urlopen(request, timeout=timeout) as response:
-                raw = response.read()
-                return json.loads(raw)
-        except HTTPError as exc:
-            raise RuntimeError(f"Member 3 assistant returned HTTP {exc.code}") from exc
-        except TimeoutError as exc:
-            raise TimeoutError("Member 3 assistant request failed") from exc
-        except URLError as exc:
+            # Ignore ambient proxies for the service bridge; never follow a
+            # redirect carrying the question/context to an unexpected service.
+            with httpx.Client(timeout=httpx.Timeout(timeout, connect=min(5.0, timeout)),
+                              trust_env=False, follow_redirects=False) as client:
+                response = client.post(endpoint, json=payload)
+            if response.status_code == 504:
+                raise TimeoutError("Member 3 assistant timed out")
+            response.raise_for_status()
+        except httpx.TimeoutException as exc:
+            raise TimeoutError("Member 3 assistant timed out") from exc
+        except httpx.HTTPError as exc:
             raise RuntimeError("Member 3 assistant service is unavailable") from exc
+        try:
+            return response.json()
+        except ValueError as exc:
+            raise AssistantResponseError("Assistant provider returned invalid JSON") from exc
 
     return call
 
 
 def get_ai_adapter() -> AIAdapter:
-    """Use Member 3's fixed local endpoint only when explicitly configured."""
+    """Bridge local mode to Member 3; explicit blank configuration disables it."""
     settings = load_settings()
     provider = (
-        _member3_provider(settings.assistant_base_url, settings.assistant_timeout_seconds)
-        if settings.assistant_base_url else None
+        _member3_provider(settings.assistant_url, settings.assistant_timeout_seconds)
+        if settings.assistant_url else None
     )
     return AIAdapter(provider=provider)

@@ -51,6 +51,7 @@ import usePrefersReducedMotion from './usePrefersReducedMotion.js'
 import {
   apiBaseUrl,
   askForExplanation,
+  askAssistantQuestion,
   fetchLiveDashboard,
   fetchSyntheticAstronauts,
   isApiRequestCancelled,
@@ -696,6 +697,7 @@ function LeftHud({
 
 function RightHud({
   selected,
+  astronaut,
   readings,
   alerts,
   regionStatuses,
@@ -709,6 +711,13 @@ function RightHud({
   analysis,
   assistant,
   assistantStatus,
+  assistantMode,
+  chatMessages,
+  chatPending,
+  chatError,
+  chatDraft,
+  onChatDraftChange,
+  onChatSubmit,
 }) {
   const panelRef = useRef(null)
   const wasOpen = useRef(false)
@@ -736,7 +745,7 @@ function RightHud({
   const trapDrawerTab = (event) => {
     if (event.key !== 'Tab' || !mobileView || !mobileOpen) return
     const focusable = panelRef.current?.querySelectorAll(
-      'button:not(:disabled), select:not(:disabled), input:not(:disabled), a[href], [tabindex]:not([tabindex="-1"])',
+      'button:not(:disabled), select:not(:disabled), input:not(:disabled), textarea:not(:disabled), a[href], [tabindex]:not([tabindex="-1"])',
     )
     if (!focusable?.length) return
     const first = focusable[0]
@@ -899,7 +908,7 @@ function RightHud({
       <div className="assistant-panel">
         <div className="assistant-heading">
           <span className="assistant-spark"><SparklesIcon size={13} /></span>
-          <div><span className="eyebrow">{live ? 'BACKEND ASSISTANT' : 'AEGIS DEMO EXPLANATION'}</span><b>{live ? assistantStatus : 'Threshold context'}</b></div>
+          <div><span className="eyebrow">{live ? 'BACKEND ASSISTANT' : 'AEGIS DEMO EXPLANATION'}</span><b>{live ? `${assistantMode.toUpperCase()} MODE · ${assistantStatus}` : 'Threshold context'}</b></div>
           <span className="assistant-beta">BETA</span>
         </div>
         <p>
@@ -911,6 +920,77 @@ function RightHud({
         </p>
         {live && assistant?.is_mock && <p className="assistant-fallback-note">Mock fallback: no assistant model was invoked.</p>}
         <span className="assistant-disclaimer"><Shield size={11} /> SYNTHETIC EDUCATIONAL DEMO · NOT A DIAGNOSIS</span>
+        {live && (
+          <div className="assistant-chat">
+            <div className="assistant-chat-heading">
+              <span>ASK THE ASSISTANT</span>
+              <span>{assistantMode === 'local' ? 'SERVER PROVIDER' : 'MOCK / OFFLINE'}</span>
+            </div>
+            <div className="assistant-chat-messages" aria-live="polite" aria-relevant="additions text">
+              {chatMessages.map((message, index) => (
+                <article className={`assistant-chat-message message-${message.role}`} key={`${index}-${message.role}`}>
+                  <strong>
+                    {message.role === 'user' ? 'YOU' : message.isMock
+                      ? 'MOCK / OFFLINE RESPONSE'
+                      : 'REAL PROVIDER RESPONSE'}
+                  </strong>
+                  <p>{message.content}</p>
+                  {message.role === 'assistant' && message.assistantVersion && (
+                    <span className="assistant-chat-version">{message.assistantVersion} · {message.status} · {message.dataSource}</span>
+                  )}
+                  {message.role === 'assistant' && (
+                    <span className="assistant-chat-limitation">
+                      {message.analysis
+                        ? `Selected analysis #${message.analysis.analysis_id}: ${message.analysis.status} · ${message.analysis.is_mock ? 'mock' : 'algorithmic'} · ${message.analysis.data_source}`
+                        : 'No analysis selected; analysis context is unknown.'}
+                    </span>
+                  )}
+                  {message.role === 'assistant' && message.limitations?.map((limitation) => (
+                    <span className="assistant-chat-limitation" key={limitation}>{limitation}</span>
+                  ))}
+                </article>
+              ))}
+              {chatPending && (
+                <div className="assistant-chat-loading" role="status">
+                  <span className="assistant-chat-spinner" aria-hidden="true" />
+                  Waiting for the backend assistant response…
+                </div>
+              )}
+            </div>
+            {chatError && <p className="assistant-chat-error" role="alert">{chatError}</p>}
+            <form
+              className="assistant-chat-form"
+              onSubmit={(event) => {
+                event.preventDefault()
+                onChatSubmit()
+              }}
+            >
+              <label className="assistant-chat-label" htmlFor="assistant-question">
+                Ask about the synthetic data or analysis
+              </label>
+              <textarea
+                id="assistant-question"
+                value={chatDraft}
+                onChange={(event) => onChatDraftChange(event.target.value)}
+                maxLength={2000}
+                rows={3}
+                placeholder="What does this model finding mean?"
+                disabled={!astronaut || chatPending}
+              />
+              <div className="assistant-chat-submit-row">
+                <span>Questions are sent to the backend; no API key is used in the browser.</span>
+                <button type="submit" disabled={!astronaut || !chatDraft.trim() || chatPending}>
+                  {chatPending ? 'WAIT…' : 'SEND'}
+                </button>
+              </div>
+            </form>
+            {assistantMode === 'local' && chatMessages.some((message) => message.role === 'assistant' && !message.isMock) && (
+              <p className="assistant-provider-note">
+                The backend reports a non-mock provider response. Its contract does not identify Gemini by name.
+              </p>
+            )}
+          </div>
+        )}
       </div>
       <div className="alerts-heading">
         <span>{live ? 'ANALYSIS FINDINGS' : 'SIMULATED ALERTS'}</span><span>{alertCountLabel}</span>
@@ -1072,9 +1152,15 @@ function App() {
   const [modelRetryKey, setModelRetryKey] = useState(0)
   const [assistant, setAssistant] = useState(null)
   const [assistantStatus, setAssistantStatus] = useState('NOT REQUESTED')
+  const [chatMessages, setChatMessages] = useState([])
+  const [chatPending, setChatPending] = useState(false)
+  const [chatError, setChatError] = useState('')
+  const [chatDraft, setChatDraft] = useState('')
   const controlsRef = useRef()
   const mobileDetailsTriggerRef = useRef(null)
   const analysisRequestRef = useRef({ controller: null, generation: 0 })
+  const chatRequestRef = useRef(null)
+  const assistantMode = import.meta.env.VITE_ASSISTANT_MODE === 'local' ? 'local' : 'mock'
   const reducedMotion = usePrefersReducedMotion()
   const snapshot = useMemo(() => createDemoSnapshot(scenarioId), [scenarioId])
   const demoEvaluation = useMemo(
@@ -1119,9 +1205,54 @@ function App() {
     analysisRequestRef.current.controller = null
   }, [])
 
+  const cancelPendingChat = useCallback((updateState = true) => {
+    chatRequestRef.current?.controller.abort()
+    chatRequestRef.current = null
+    if (updateState) setChatPending(false)
+  }, [])
+
+  const submitChatQuestion = () => {
+    const question = chatDraft.trim()
+    if (!question || !isLive || !astronaut || chatRequestRef.current) return
+
+    const controller = new AbortController()
+    const request = { controller, astronaut }
+    chatRequestRef.current = request
+    setChatDraft('')
+    setChatError('')
+    setChatMessages((current) => [...current, { role: 'user', content: question }])
+    setChatPending(true)
+
+    askAssistantQuestion(astronaut, question, assistantMode, liveAnalysis?.id ?? null, {
+      signal: controller.signal,
+    }).then((response) => {
+      if (chatRequestRef.current !== request) return
+      setChatMessages((current) => [...current, {
+        role: 'assistant',
+        content: response.answer,
+        isMock: response.is_mock,
+        assistantVersion: response.assistant_version,
+        limitations: response.limitations,
+        status: response.status,
+        dataSource: response.data_source,
+        analysis: response.context?.analysis ?? null,
+      }])
+    }).catch((error) => {
+      if (chatRequestRef.current !== request || isApiRequestCancelled(error)) return
+      setChatError(error.message)
+    }).finally(() => {
+      if (chatRequestRef.current === request) {
+        chatRequestRef.current = null
+        setChatPending(false)
+      }
+    })
+  }
+
   const requestAssistant = useCallback(async (analysis, { signal } = {}) => {
     if (!analysis || !astronaut || appMode !== 'live') return
-    const configuredMode = import.meta.env.VITE_ASSISTANT_MODE === 'local' ? 'local' : 'mock'
+    // Loading a dashboard or running ML must never spend a model request.
+    // Only the explicit chat form uses the configured provider mode.
+    const configuredMode = 'mock'
     setAssistantStatus(configuredMode === 'local' ? 'CONNECTING' : 'MOCK MODE')
     try {
       const response = await askForExplanation(astronaut, analysis.id, configuredMode, { signal })
@@ -1207,7 +1338,10 @@ function App() {
     return () => mediaQuery.removeEventListener?.('change', updateViewport)
   }, [])
 
-  useEffect(() => () => cancelPendingAnalysis(), [cancelPendingAnalysis])
+  useEffect(() => () => {
+    cancelPendingAnalysis()
+    cancelPendingChat(false)
+  }, [cancelPendingAnalysis, cancelPendingChat])
 
   const resetCamera = () => {
     setSelectedRegion(null)
@@ -1265,11 +1399,15 @@ function App() {
   const changeAppMode = (nextMode) => {
     if (nextMode === appMode) return
     cancelPendingAnalysis()
+    cancelPendingChat()
     setAnalysisLoading(false)
     setAppMode(nextMode)
     setSelectedRegion(null)
     setAssistant(null)
     setLiveDashboard(null)
+    setChatMessages([])
+    setChatError('')
+    setChatDraft('')
     setLiveError('')
     if (nextMode === 'demo') setAstronaut('A-01')
     else {
@@ -1281,6 +1419,7 @@ function App() {
 
   const changeAstronaut = (nextAstronaut) => {
     cancelPendingAnalysis()
+    cancelPendingChat()
     setAnalysisLoading(false)
     setAstronaut(nextAstronaut)
     if (isLive) {
@@ -1288,14 +1427,21 @@ function App() {
       setLiveError('')
       setLiveDashboard(null)
       setAssistant(null)
+      setChatMessages([])
+      setChatError('')
+      setChatDraft('')
     }
   }
 
   const retryLiveConnection = () => {
     if (!isLive) return
+    cancelPendingChat()
     setLiveStatus('loading')
     setLiveError('')
     setLiveDashboard(null)
+    setChatMessages([])
+    setChatError('')
+    setChatDraft('')
     setSyntheticAstronauts([])
     setAstronaut('')
     setLiveRefreshVersion((version) => version + 1)
@@ -1472,6 +1618,14 @@ function App() {
           analysis={liveAnalysis}
           assistant={assistant}
           assistantStatus={assistantStatus}
+          astronaut={astronaut}
+          assistantMode={assistantMode}
+          chatMessages={chatMessages}
+          chatPending={chatPending}
+          chatError={chatError}
+          chatDraft={chatDraft}
+          onChatDraftChange={setChatDraft}
+          onChatSubmit={submitChatQuestion}
         />
       </div>
       <footer className="bottom-status">

@@ -139,16 +139,21 @@ $analysis = Invoke-RestMethod -Method Post -Uri 'http://127.0.0.1:8000/health/AS
 $analysis | ConvertTo-Json -Depth 20
 ```
 
+For the dashboard's user-submitted assistant chat, native Gemini provider
+configuration, and mock/offline behavior, see
+[docs/gemini-dashboard-chat.md](docs/gemini-dashboard-chat.md).
+
 Check `is_mock` is `false`, `model_version` is present, and `status` is the
 actual algorithmic result (`normal`, `anomaly`, or `insufficient_data`). The
 command does not infer a result from the Data Engine's scenario label.
 
 ### Verify scenarios, anatomy, and assistant label
 
-- In DEMO MODE, inspect all six scenarios. Heart-rate, SpO2, and respiration
+- In DEMO MODE, inspect all ten scenarios. Heart-rate, SpO2, and respiration
   alerts are global. The separate left-arm warning and right-arm critical
   synthetic markers highlight only their named arms. The mixed scenario shows
-  three global vital alerts and three explicit localized markers.
+  three global vital alerts and three explicit localized markers. Additional
+  critical scenarios cover each limb and multiple localized critical markers.
 - Select **FULL BODY**, **SKELETON**, **MUSCLES**, and **ORGANS**. Confirm the
   anatomical GLB appears. Drag to rotate, use the wheel to zoom, and select the
   reset control. Region selection changes navigation/highlighting only.

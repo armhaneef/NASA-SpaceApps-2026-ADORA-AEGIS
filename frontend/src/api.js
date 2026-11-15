@@ -1,5 +1,7 @@
 const API_BASE_URL = (import.meta.env?.VITE_API_BASE_URL || 'http://127.0.0.1:8000').replace(/\/$/, '')
 const DEFAULT_TIMEOUT_MS = 10_000
+// Member 3 allows 60 s; the backend bridge allows 70 s. Leave browser headroom.
+const ASSISTANT_TIMEOUT_MS = 90_000
 const configuredTimeout = Number(import.meta.env?.VITE_API_TIMEOUT_MS)
 const API_TIMEOUT_MS = Number.isFinite(configuredTimeout) && configuredTimeout > 0
   ? configuredTimeout
@@ -180,15 +182,39 @@ export function runLocalAnalysis(astronautId, source, options = {}) {
 }
 
 export function askForExplanation(astronautId, analysisId, mode = 'mock', options = {}) {
+  return askAssistantQuestion(astronautId,
+    'Explain the latest synthetic analysis and state its limitations.', mode, analysisId, options)
+}
+
+export function askAssistantQuestion(astronautId, question, mode = 'mock', analysisId = null, options = {}) {
   return request('/ai/assistant', {
     ...options,
+    timeoutMs: options.timeoutMs ?? ASSISTANT_TIMEOUT_MS,
     method: 'POST',
     body: JSON.stringify({
       astronaut_id: astronautId,
-      question: 'Explain the latest synthetic analysis and state its limitations.',
+      question,
       mode,
-      analysis_id: analysisId,
+      ...(analysisId == null ? {} : { analysis_id: analysisId }),
     }),
+  }).then((response) => {
+    if (!response
+      || response.astronaut_id !== astronautId
+      || response.mode !== mode
+      || response.status !== (response.is_mock ? 'mock' : 'completed')
+      || typeof response.answer !== 'string'
+      || !response.answer.trim()
+      || typeof response.is_mock !== 'boolean'
+      || typeof response.assistant_version !== 'string'
+      || !response.assistant_version.trim()
+      || !Array.isArray(response.limitations)
+      || response.limitations.length === 0
+      || !response.limitations.every((limitation) => (
+        typeof limitation === 'string' && limitation.trim().length > 0
+      ))) {
+      throw apiRequestError('AEGIS assistant returned an incomplete response.', 'API_INVALID_RESPONSE')
+    }
+    return response
   })
 }
 
@@ -198,4 +224,8 @@ export function apiBaseUrl() {
 
 export function apiTimeoutMs() {
   return API_TIMEOUT_MS
+}
+
+export function assistantTimeoutMs() {
+  return ASSISTANT_TIMEOUT_MS
 }

@@ -121,9 +121,11 @@ limitations has 1–20 nonempty strings up to 1000 each. Unknown fields, non-JSO
 values and nonfinite numbers are rejected. The backend checks identity and
 structure; it cannot certify factual or medical safety from this schema.
 
-Set `AEGIS_ASSISTANT_URL=http://127.0.0.1:8001` to enable the fixed local HTTP
-bridge. `AEGIS_ASSISTANT_TIMEOUT_SECONDS` controls its request timeout (default
-3 seconds, maximum 30). The URL is configuration only; request data cannot
+The fixed HTTP bridge defaults to
+`AI_ASSISTANT_URL=http://127.0.0.1:8002/api/v1/assistant/respond`.
+`AI_ASSISTANT_TIMEOUT_SECONDS` controls its timeout (default 70 seconds,
+maximum 120); keep Member 3 < backend < browser (default 60 < 70 < 90 seconds).
+The URL is configuration only; request data cannot
 choose a host. The bridge sends the exact `astronaut_id`, `question`, and
 `context` shape above, validates the returned schema and identity, and maps
 timeouts/unavailability to safe HTTP errors. `mode: "mock"` remains available
@@ -132,12 +134,16 @@ or mock assistant performed an explanation.
 
 Member 3's service must run on a separate port because both FastAPI apps
 otherwise default to 8000. Its `LLM_PROVIDER=offline` setting does not provide a
-non-mock answer; a local model such as configured Ollama is needed for that.
+non-mock answer; a configured provider such as Gemini is needed for that.
+Only explicit chat submission can invoke the configured model; automatic
+dashboard analysis explanations always request mock mode.
 
 ## Verify in PyCharm and /docs
 
 Use `backend/.venv/Scripts/python.exe` as the PyCharm interpreter and `backend`
-as the working directory. The bridge uses the Python standard library.
+as the working directory. The bridge uses `httpx` with ambient proxies and
+redirects disabled. Backend bridge changes require Member 4 review. The legacy
+`AEGIS_ASSISTANT_URL` base URL remains supported when the canonical setting is absent.
 From the terminal at the repository root:
 
 ```powershell
@@ -164,7 +170,7 @@ Open http://127.0.0.1:8000/docs and use **Try it out → Execute**:
 2. Execute **POST /ai/assistant** using the first JSON example. Expect 200,
    an answer beginning `MOCK:`, `is_mock: true`, `status: "mock"`, limitations,
    and `context: {"analysis": null}`. No sensor readings are required.
-3. Change mode to `local`. Without `AEGIS_ASSISTANT_URL`, expect 503. With the
+3. Change mode to `local`. With `AI_ASSISTANT_URL` explicitly blank, expect 503. With the
    Member 3 service configured but its provider offline, expect a safe 503; no
    successful-looking answer is returned.
 4. Submit a whitespace-only question: expect 422. Use an unknown astronaut:

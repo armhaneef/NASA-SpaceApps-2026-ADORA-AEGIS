@@ -10,8 +10,8 @@ class Settings(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     cors_origins: tuple[str, ...] = ("http://localhost:5173", "http://localhost:5175")
-    assistant_base_url: str | None = None
-    assistant_timeout_seconds: float = Field(default=3.0, gt=0, le=30)
+    assistant_url: str | None = "http://127.0.0.1:8002/api/v1/assistant/respond"
+    assistant_timeout_seconds: float = Field(default=70.0, gt=0, le=120)
 
     @field_validator("cors_origins")
     @classmethod
@@ -42,16 +42,28 @@ def load_settings() -> Settings:
         if not isinstance(origins, list):
             raise ValueError("AEGIS_CORS_ORIGINS must be a JSON array of explicit origins")
 
-    assistant_url = os.environ.get("AEGIS_ASSISTANT_URL", "").strip()
-    assistant_base_url = None
-    if assistant_url:
-        url = TypeAdapter(AnyHttpUrl).validate_python(assistant_url)
+    # The canonical setting is a complete endpoint. Keep the earlier base-URL
+    # setting for existing deployments; an explicit blank disables local mode.
+    endpoint = os.environ.get("AI_ASSISTANT_URL")
+    if endpoint is None:
+        legacy_base = os.environ.get("AEGIS_ASSISTANT_URL")
+        if legacy_base is None:
+            endpoint = Settings().assistant_url
+        elif legacy_base.strip():
+            endpoint = f"{legacy_base.strip().rstrip('/')}/api/v1/assistant/respond"
+        else:
+            endpoint = ""
+    endpoint = endpoint.strip()
+    assistant_url = None
+    if endpoint:
+        url = TypeAdapter(AnyHttpUrl).validate_python(endpoint)
         if url.username is not None or url.password is not None or url.query is not None or url.fragment is not None:
-            raise ValueError("AEGIS_ASSISTANT_URL must not contain credentials, query, or fragment")
-        assistant_base_url = str(url).rstrip("/")
-    timeout = float(os.environ.get("AEGIS_ASSISTANT_TIMEOUT_SECONDS", "3"))
+            raise ValueError("AI_ASSISTANT_URL must not contain credentials, query, or fragment")
+        assistant_url = str(url)
+    timeout = float(os.environ.get("AI_ASSISTANT_TIMEOUT_SECONDS",
+                                   os.environ.get("AEGIS_ASSISTANT_TIMEOUT_SECONDS", "70")))
     return Settings(
         cors_origins=origins,
-        assistant_base_url=assistant_base_url,
+        assistant_url=assistant_url,
         assistant_timeout_seconds=timeout,
     )

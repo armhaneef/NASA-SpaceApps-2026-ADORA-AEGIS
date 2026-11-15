@@ -125,12 +125,18 @@ Assistant request:
 ```
 
 The backend forwards only the selected analysis summary. Configure
-`AEGIS_ASSISTANT_URL=http://127.0.0.1:8001` to connect Member 3's existing
-`POST /api/v1/assistant/respond` contract. The assistant needs a local provider
+`AI_ASSISTANT_URL=http://127.0.0.1:8002/api/v1/assistant/respond` (the default)
+to connect Member 3's existing contract. The assistant needs a configured provider
 to produce a non-mock explanation; otherwise the backend reports unavailability
 and a caller may explicitly retry with `mode: "mock"`. Responses include
 `answer`, `assistant_version`, `is_mock`, `limitations`, `status`, `data_source`,
 and the selected minimal `context`.
+
+The bridge uses a 70-second response timeout with a shorter connect timeout;
+the browser allows 90 seconds for assistant requests. Explicit mock mode
+never calls Member 3. Automatic dashboard explanations always use mock mode;
+only submitted chat questions can use the configured provider. Member 4 must
+review backend bridge changes; Member 3's response schema is unchanged.
 
 FastAPI's interactive development documentation is available at `/docs` while
 the local server is running.

@@ -274,8 +274,9 @@ $env:AEGIS_CORS_ORIGINS = '["http://localhost:5173","http://localhost:5175"]'
 Run from `backend` using its existing interpreter. `.env.example` documents the
 setting; an `.env` file is loaded only when explicitly passed with `--env-file`.
 No database schema, route path or success-response shape changed. To connect
-Member 3's service, set `AEGIS_ASSISTANT_URL=http://127.0.0.1:8001` and optionally
-`AEGIS_ASSISTANT_TIMEOUT_SECONDS=3` before launching the backend. See
+Member 3's service uses `AI_ASSISTANT_URL=http://127.0.0.1:8002/api/v1/assistant/respond`
+and `AI_ASSISTANT_TIMEOUT_SECONDS=70` by default. Set the URL explicitly blank
+to disable the bridge. These backend changes require Member 4 review. See
 [PHASE5_ASSISTANT.md](PHASE5_ASSISTANT.md) and the root README for Windows
 commands. Leave the URL unset to keep only the explicit backend mock mode.
 
