@@ -176,7 +176,9 @@ def test_invalid_requests(seeded, changes):
 def test_provenance_and_exact_timestamp(seeded):
     assert seeded.post(URL, json=REQUEST | {"source": "real"}).status_code == 409
     assert seeded.post(URL, json=REQUEST | {"timestamp": "2026-11-14T09:00:00Z"}).status_code == 409
-    seeded.post("/health/ingest", json=READING | {"is_simulated": False})
+    assert seeded.post("/health/ingest", json=READING | {
+        "sensor_type": "independent_non_simulated_sensor", "is_simulated": False,
+    }).status_code == 201
     assert seeded.post(URL, json=REQUEST).status_code == 409
 
 
@@ -188,7 +190,9 @@ def test_history_policy_and_isolation(seeded):
     seeded.post("/health/ingest", json=READING | {"source": "synthetic_other", "value": 200})
     seeded.post("/astronauts", json=PROFILE | {"astronaut_id": "OTHER"})
     seeded.post("/health/ingest", json=READING | {"astronaut_id": "OTHER", "value": 200})
-    seeded.post("/health/ingest", json=READING | {"value": 79})
+    seeded.post("/health/ingest", json=READING | {
+        "sensor_type": "independent_sensor", "value": 79,
+    })
     response = seeded.post(URL, json=REQUEST | {"timestamp": READING["timestamp"], "history_limit": 1})
     assert response.status_code == 201
     payload = response.json()["prepared_input"]

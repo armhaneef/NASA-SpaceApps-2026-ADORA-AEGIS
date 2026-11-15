@@ -30,6 +30,23 @@ def test_ingest_and_retrieve(astronaut_client):
     assert client.get("/health/AST-001/history").json() == [record]
 
 
+def test_exact_retry_is_reused_and_changed_retry_returns_conflict(astronaut_client):
+    client = astronaut_client
+    first = client.post("/health/ingest", json=READING)
+    assert first.status_code == 201
+    saved = first.json()[0]
+
+    retry = client.post("/health/ingest", json=READING)
+    assert retry.status_code == 200
+    assert retry.json() == [saved]
+    assert client.get("/health/AST-001/history").json() == [saved]
+
+    conflict = client.post("/health/ingest", json=READING | {"value": 79})
+    assert conflict.status_code == 409
+    assert "different content" in conflict.json()["detail"]
+    assert client.get("/health/AST-001/history").json() == [saved]
+
+
 @pytest.mark.parametrize("changes", [
     {"timestamp": "bad"}, {"timestamp": "2026-11-14T10:00:00"},
     {"measurement_type": "ecg_waveform"}, {"unit": "wrong"},
@@ -68,13 +85,17 @@ def test_grouped_ingestion_atomic(astronaut_client):
     payload = {key: READING[key] for key in
                ("astronaut_id", "timestamp", "sensor_type", "is_simulated")}
     payload.update(data_source="synthetic_example", heart_rate={"value": 78, "unit": "beats/min"},
-                   spo2={"value": 98, "unit": "%"})
+                   spo2={"value": 98, "unit": "%"},
+                   skin_temperature={"value": 32.0, "unit": "degC"})
     invalid = payload | {"spo2": {"value": 101, "unit": "%"}}
     assert astronaut_client.post("/health/ingest", json=invalid).status_code == 422
     assert astronaut_client.get("/health/AST-001/history").json() == []
     response = astronaut_client.post("/health/ingest", json=payload)
     assert response.status_code == 201
-    assert len(response.json()) == 2
+    assert len(response.json()) == 3
+    assert {row["measurement_type"] for row in response.json()} == {
+        "heart_rate", "spo2", "skin_temperature",
+    }
     assert {row["source"] for row in response.json()} == {"synthetic_example"}
 
 
@@ -96,6 +117,8 @@ def test_latest_and_history_filters(astronaut_client):
     for payload in [READING | {"timestamp": "2026-11-14T11:00:00Z", "value": 80},
                     READING, READING | {"value": 81, "timestamp": "2026-11-14T11:00:00Z"},
                     READING | {"measurement_type": "spo2", "value": 98, "unit": "%"}]:
+        if payload["value"] == 81:
+            payload = payload | {"sensor_type": "independent_synthetic_stream"}
         assert client.post("/health/ingest", json=payload).status_code == 201
     latest = client.get("/health/AST-001/latest").json()
     assert [(row["measurement_type"], row["value"]) for row in latest] == [

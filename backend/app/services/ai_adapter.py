@@ -5,6 +5,9 @@ from collections.abc import Callable
 from copy import deepcopy
 from datetime import datetime, timezone
 
+import httpx
+
+from app.core.config import load_settings
 from app.schemas.assistant import AssistantProviderRequest, AssistantProviderResponse
 from app.schemas.assistant import AssistantResponse
 from app.services.errors import AssistantResponseError, AssistantTimeoutError, AssistantUnavailableError
@@ -36,6 +39,8 @@ class AIAdapter:
                 raw = self.provider(deepcopy(request.model_dump(mode="json")))
             except TimeoutError as exc:
                 raise AssistantTimeoutError("Assistant provider timed out; retry later") from exc
+            except AssistantResponseError:
+                raise
             except Exception as exc:
                 raise AssistantUnavailableError("Assistant provider failed; retry later") from exc
             try:
@@ -56,11 +61,35 @@ class AIAdapter:
         )
 
 
-def get_ai_adapter() -> AIAdapter:
-    """Unconfigured until Member 3 confirms the provider contract.
+def _member3_provider(endpoint: str, timeout: float) -> Callable[[dict], dict]:
+    """Call Member 3's existing backend-compatible route over localhost HTTP."""
+    def call(payload: dict) -> dict:
+        try:
+            # Ignore ambient proxies for the service bridge; never follow a
+            # redirect carrying the question/context to an unexpected service.
+            with httpx.Client(timeout=httpx.Timeout(timeout, connect=min(5.0, timeout)),
+                              trust_env=False, follow_redirects=False) as client:
+                response = client.post(endpoint, json=payload)
+            if response.status_code == 504:
+                raise TimeoutError("Member 3 assistant timed out")
+            response.raise_for_status()
+        except httpx.TimeoutException as exc:
+            raise TimeoutError("Member 3 assistant timed out") from exc
+        except httpx.HTTPError as exc:
+            raise RuntimeError("Member 3 assistant service is unavailable") from exc
+        try:
+            return response.json()
+        except ValueError as exc:
+            raise AssistantResponseError("Assistant provider returned invalid JSON") from exc
 
-    Replace this factory with AIAdapter(provider=approved_callable), or use a
-    FastAPI dependency override. Never select an arbitrary module or URL from
-    an incoming assistant request.
-    """
-    return AIAdapter()
+    return call
+
+
+def get_ai_adapter() -> AIAdapter:
+    """Bridge local mode to Member 3; explicit blank configuration disables it."""
+    settings = load_settings()
+    provider = (
+        _member3_provider(settings.assistant_url, settings.assistant_timeout_seconds)
+        if settings.assistant_url else None
+    )
+    return AIAdapter(provider=provider)

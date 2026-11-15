@@ -3,6 +3,9 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import urlsplit
+
+from pydantic import AnyHttpUrl, TypeAdapter, ValidationError
 
 
 def _load_local_env() -> None:
@@ -32,6 +35,10 @@ def _get_int_env(name: str, default: int) -> int:
     return value if value > 0 else default
 
 
+def _has_control_characters(value: str) -> bool:
+    return any(ord(char) < 0x20 or 0x7F <= ord(char) <= 0x9F for char in value)
+
+
 def _get_allowed_origins() -> tuple[str, ...]:
     defaults = (
         "http://localhost:3000",
@@ -39,10 +46,44 @@ def _get_allowed_origins() -> tuple[str, ...]:
         "http://localhost:5173",
         "http://127.0.0.1:5173",
     )
-    configured = os.getenv("AI_ALLOWED_ORIGINS", "").strip()
-    if not configured:
+    configured = os.getenv("AI_ALLOWED_ORIGINS")
+    if configured is None:
         return defaults
-    return tuple(origin.strip().rstrip("/") for origin in configured.split(",") if origin.strip())
+    error = (
+        "AI_ALLOWED_ORIGINS must be a comma-separated list of explicit HTTP(S) origins "
+        "with only scheme, host and optional port; empty entries, control characters, "
+        "wildcards, credentials, paths, queries and fragments are not allowed."
+    )
+    # URL parsers and strip() can silently discard controls, including leading SOH.
+    if _has_control_characters(configured):
+        raise ValueError(error)
+    origins = []
+    for entry in configured.split(","):
+        origin = entry.strip()
+        if not origin or "*" in origin or "\\" in origin or any(char.isspace() for char in origin):
+            raise ValueError(error)
+        try:
+            parts = urlsplit(origin)
+            url = TypeAdapter(AnyHttpUrl).validate_python(origin)
+        except (ValueError, ValidationError):
+            # Configuration errors must not echo an accidentally embedded secret.
+            raise ValueError(error) from None
+        if (parts.scheme not in {"http", "https"} or not parts.netloc
+                or parts.netloc.endswith(":") or parts.path not in {"", "/"}
+                or parts.username is not None or parts.password is not None
+                or url.username is not None or url.password is not None
+                or url.path not in {None, "", "/"}
+                or url.query is not None or url.fragment is not None):
+            raise ValueError(error)
+        normalized = str(url).rstrip("/")
+        # Host decoding can introduce characters absent from the original entry
+        # (for example %2A -> * and %2C -> comma). Validate the final origin too.
+        if (_has_control_characters(normalized)
+                or any(char.isspace() for char in normalized)
+                or any(char in normalized for char in ("*", ",", "\\", "%"))):
+            raise ValueError(error)
+        origins.append(normalized)
+    return tuple(dict.fromkeys(origins))
 
 
 _load_local_env()

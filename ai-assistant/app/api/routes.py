@@ -161,7 +161,8 @@ def create_app() -> Any:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=list(settings.allowed_origins),
-        allow_credentials=True,
+        # The API uses JSON requests, not cookie/session authentication.
+        allow_credentials=False,
         allow_methods=["*"],
         allow_headers=["*"],
     )

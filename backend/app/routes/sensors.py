@@ -2,7 +2,7 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.orm import Session
 
 from app.database.connection import get_session
@@ -19,10 +19,12 @@ def measurement_filter(measurement_type: str | None = None) -> str | None:
     return measurement_type
 
 
-@router.post("/ingest", response_model=list[SensorRead], status_code=201)
-def ingest(payload: SensorCreate | GroupedReading, session: Database):
+@router.post("/ingest", response_model=list[SensorRead])
+def ingest(payload: SensorCreate | GroupedReading, session: Database, response: Response):
     readings = payload.to_readings() if isinstance(payload, GroupedReading) else [payload]
-    return service.ingest(session, readings)
+    records, created = service.ingest(session, readings)
+    response.status_code = 201 if created else 200
+    return records
 
 
 @router.get("/{astronaut_id}/latest", response_model=list[SensorRead])

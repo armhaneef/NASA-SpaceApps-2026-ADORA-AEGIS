@@ -18,6 +18,8 @@ def database_engine(tmp_path):
 
 @pytest.fixture(autouse=True)
 def isolate_app_database(monkeypatch, database_engine):
+    # Tests never contact a running Member 3 service unless they replace HTTP.
+    monkeypatch.setenv("AI_ASSISTANT_URL", "")
     monkeypatch.setattr("app.main.init_db", lambda: init_db(database_engine))
     def test_session():
         with Session(database_engine) as session:

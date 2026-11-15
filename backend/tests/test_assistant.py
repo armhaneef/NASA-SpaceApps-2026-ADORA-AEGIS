@@ -1,6 +1,9 @@
 """Assistant validation, isolation, provider failures, and context provenance."""
 
 import copy
+import json
+
+import httpx
 
 import pytest
 from sqlalchemy import func, select
@@ -9,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.main import app
 from app.models.models import Astronaut, HealthAnalysis, SensorReading
 from app.services.ai_adapter import AIAdapter, get_ai_adapter
+from app.schemas.assistant import AssistantProviderRequest
 
 PROFILE = {"astronaut_id": "AST-AI", "name": "Private fictional name",
            "mission_id": "MARS-SIM", "mission_role": "Engineer",
@@ -218,3 +222,49 @@ def test_openapi_exposes_assistant(client):
     assert schema.status_code == 200
     assert "post" in schema.json()["paths"][URL]
     assert client.get("/docs").status_code == 200
+
+
+def test_configured_member3_http_contract(monkeypatch):
+    monkeypatch.setenv("AI_ASSISTANT_URL", "http://127.0.0.1:8002/api/v1/assistant/respond")
+    monkeypatch.setenv("AEGIS_ASSISTANT_TIMEOUT_SECONDS", "2.5")
+    seen = {}
+
+    def handler(request):
+        seen["url"] = str(request.url)
+        seen["timeout"] = request.extensions["timeout"]
+        seen["payload"] = json.loads(request.content)
+        return httpx.Response(200, json=valid_response(seen["payload"]))
+
+    client_type = httpx.Client
+    monkeypatch.setattr("app.services.ai_adapter.httpx.Client", lambda **kwargs: client_type(
+        transport=httpx.MockTransport(handler), **kwargs))
+    adapter = get_ai_adapter()
+    request = AssistantProviderRequest(
+        astronaut_id="AST-AI", question="Explain this.", context={"analysis": None},
+    )
+    result = adapter.respond(request, "local")
+
+    assert seen["url"] == "http://127.0.0.1:8002/api/v1/assistant/respond"
+    assert seen["timeout"]["read"] == 2.5
+    assert seen["payload"] == {
+        "astronaut_id": "AST-AI", "question": "Explain this.", "context": {"analysis": None},
+    }
+    assert result.is_mock is False
+    assert result.data_source == "configured_local_provider"
+
+
+@pytest.mark.parametrize("failure,expected_status", [
+    (httpx.ReadTimeout, 504),
+    (httpx.ConnectError, 503),
+])
+def test_member3_http_failures_keep_distinct_statuses(client, monkeypatch, failure, expected_status):
+    monkeypatch.setenv("AI_ASSISTANT_URL", "http://127.0.0.1:8002/api/v1/assistant/respond")
+    def fail_request(*_args, **_kwargs):
+        raise failure("request failed")
+    client_type = httpx.Client
+    monkeypatch.setattr("app.services.ai_adapter.httpx.Client", lambda **kwargs: client_type(
+        transport=httpx.MockTransport(fail_request), **kwargs))
+    client.post("/astronauts", json=PROFILE)
+    response = client.post(URL, json=REQUEST | {"mode": "local"})
+    assert response.status_code == expected_status
+    assert "answer" not in response.json()
