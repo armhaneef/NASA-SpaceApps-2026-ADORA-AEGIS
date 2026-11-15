@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   apiTimeoutMs,
+  askAssistantQuestion,
   fetchSyntheticAstronauts,
   filterSyntheticAstronauts,
   isApiRequestCancelled,
@@ -93,6 +94,79 @@ test('network failures have a user-facing API connectivity error', async () => {
     await assert.rejects(fetchSyntheticAstronauts(), (error) => (
       error.code === 'API_NETWORK_ERROR' && error.message.includes('Cannot reach')
     ))
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
+test('assistant chat uses the existing backend contract and preserves provider provenance', async () => {
+  const originalFetch = globalThis.fetch
+  let request
+  globalThis.fetch = async (url, options) => {
+    request = { url, options, body: JSON.parse(options.body) }
+    return new Response(JSON.stringify({
+      astronaut_id: 'AST-001',
+      answer: 'The synthetic analysis reports a model finding.',
+      assistant_version: 'member3-ai-assistant-0.1.0',
+      is_mock: false,
+      limitations: ['This is not medical advice.'],
+      mode: 'local',
+      status: 'completed',
+      data_source: 'configured_local_provider',
+      context: { analysis: null },
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+  }
+  try {
+    const response = await askAssistantQuestion(
+      'AST-001',
+      'What does this synthetic analysis show?',
+      'local',
+      17,
+    )
+    assert.equal(request.url, 'http://127.0.0.1:8000/ai/assistant')
+    assert.deepEqual(request.body, {
+      astronaut_id: 'AST-001',
+      question: 'What does this synthetic analysis show?',
+      mode: 'local',
+      analysis_id: 17,
+    })
+    assert.equal(request.options.method, 'POST')
+    assert.equal(request.options.signal.aborted, false)
+    assert.equal(response.is_mock, false)
+    assert.equal(response.answer, 'The synthetic analysis reports a model finding.')
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
+test('assistant chat reports request timeouts distinctly', async () => {
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = (_url, { signal }) => new Promise((_resolve, reject) => {
+    signal.addEventListener('abort', () => reject(new Error('aborted')), { once: true })
+  })
+  try {
+    await assert.rejects(
+      askAssistantQuestion('AST-001', 'Explain this finding.', 'local', null, { timeoutMs: 5 }),
+      (error) => error.code === 'API_REQUEST_TIMEOUT',
+    )
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
+test('assistant chat rejects an empty or malformed answer', async () => {
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    answer: '  ',
+    assistant_version: 'test',
+    is_mock: false,
+    limitations: ['Not medical advice.'],
+  }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+  try {
+    await assert.rejects(
+      askAssistantQuestion('AST-001', 'Explain this finding.', 'local'),
+      (error) => error.code === 'API_INVALID_RESPONSE',
+    )
   } finally {
     globalThis.fetch = originalFetch
   }

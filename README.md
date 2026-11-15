@@ -139,6 +139,10 @@ $analysis = Invoke-RestMethod -Method Post -Uri 'http://127.0.0.1:8000/health/AS
 $analysis | ConvertTo-Json -Depth 20
 ```
 
+For the dashboard's user-submitted assistant chat, Gemini-compatible provider
+configuration, and mock/offline behavior, see
+[docs/gemini-dashboard-chat.md](docs/gemini-dashboard-chat.md).
+
 Check `is_mock` is `false`, `model_version` is present, and `status` is the
 actual algorithmic result (`normal`, `anomaly`, or `insufficient_data`). The
 command does not infer a result from the Data Engine's scenario label.
