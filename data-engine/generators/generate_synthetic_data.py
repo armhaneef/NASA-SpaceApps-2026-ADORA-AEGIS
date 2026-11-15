@@ -2,6 +2,11 @@
 
 All values produced by this module are fabricated software-demo data. They are
 not observations, medical advice, or validated clinical thresholds.
+
+``body_temperature_c`` retains its legacy, unspecified body-temperature meaning.
+``skin_temperature_c`` is a separate, explicitly synthetic wearable-feature
+fixture for exercising the ML input contract; it is never derived from the
+legacy field and does not vary by vital-sign scenario.
 """
 
 import argparse
@@ -22,6 +27,7 @@ CSV_HEADERS = (
     "heart_rate_bpm",
     "spo2_percent",
     "body_temperature_c",
+    "skin_temperature_c",
     "respiration_rate_bpm",
     "scenario",
 )
@@ -48,6 +54,11 @@ SCENARIOS: dict[str, dict[str, tuple[float, float, float, float]]] = {
     },
 }
 
+# A fixed engineering fixture for a wearable skin-temperature feature. The
+# distribution is deliberately independent of the scenario and body-temperature
+# generator so it does not imply physiological coupling or scenario diagnosis.
+SKIN_TEMPERATURE_PROFILE = (31.8, 0.5, 30.3, 33.3)
+
 
 def _bounded_value(
     rng: random.Random,
@@ -72,6 +83,7 @@ def generate_readings(
     number_of_readings: int = 60,
     scenario: str = "normal",
     seed: int = 42,
+    astronaut_id: str = ASTRONAUT_ID,
 ) -> list[dict[str, Any]]:
     """Generate a deterministic, one-minute series for the requested scenario.
 
@@ -83,8 +95,11 @@ def generate_readings(
     if scenario not in SCENARIOS:
         choices = ", ".join(SCENARIOS)
         raise ValueError(f"Unknown scenario {scenario!r}. Choose from: {choices}")
+    if not isinstance(astronaut_id, str) or not astronaut_id.strip():
+        raise ValueError("astronaut_id must be a non-empty string")
 
     rng = random.Random(seed)
+    skin_temperature_rng = random.Random(seed ^ 0x51C1)
     profiles = SCENARIOS[scenario]
     readings: list[dict[str, Any]] = []
 
@@ -93,7 +108,7 @@ def generate_readings(
         timestamp = START_TIME + index * SAMPLE_INTERVAL
         readings.append(
             {
-                "astronaut_id": ASTRONAUT_ID,
+                "astronaut_id": astronaut_id,
                 "timestamp": timestamp.isoformat(timespec="seconds").replace(
                     "+00:00", "Z"
                 ),
@@ -105,6 +120,9 @@ def generate_readings(
                 ),
                 "body_temperature_c": _bounded_value(
                     rng, profiles["body_temperature_c"], 0.08, progress, 2
+                ),
+                "skin_temperature_c": _bounded_value(
+                    skin_temperature_rng, SKIN_TEMPERATURE_PROFILE, 0, progress, 2
                 ),
                 "respiration_rate_bpm": _bounded_value(
                     rng, profiles["respiration_rate_bpm"], 1.0, progress, 1
@@ -176,6 +194,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="random seed for reproducible output (default: 42)",
     )
     parser.add_argument(
+        "--astronaut-id",
+        default=ASTRONAUT_ID,
+        help=f"synthetic identifier (default: {ASTRONAUT_ID})",
+    )
+    parser.add_argument(
         "--output-dir",
         type=Path,
         default=Path(__file__).resolve().parents[2] / "data" / "synthetic",
@@ -187,7 +210,7 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> None:
     """Run the generator from the command line."""
     args = build_parser().parse_args()
-    readings = generate_readings(args.readings, args.scenario, args.seed)
+    readings = generate_readings(args.readings, args.scenario, args.seed, args.astronaut_id)
     csv_path, latest_json_path = write_readings(readings, args.output_dir)
     print(f"Generated {len(readings)} synthetic readings for {args.scenario!r}.")
     print(f"CSV: {csv_path}")

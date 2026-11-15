@@ -36,6 +36,7 @@ The options are:
 | `--readings` | Positive integer; `60` | Number of readings to generate |
 | `--scenario` | `normal`, `warning`, `critical`; `normal` | Select an illustrative value profile |
 | `--seed` | Integer; `42` | Reproduce the same generated series |
+| `--astronaut-id` | String; `AST-001` | Choose a fabricated identifier for multi-profile demos |
 | `--output-dir` | `data\synthetic` | Choose where to write both output files |
 
 Use `--help` to display the command-line options. The generator uses only the
@@ -50,6 +51,7 @@ Python standard library.
   "heart_rate_bpm": 76,
   "spo2_percent": 97.5,
   "body_temperature_c": 36.66,
+  "skin_temperature_c": 31.72,
   "respiration_rate_bpm": 15.3,
   "scenario": "normal"
 }
@@ -57,7 +59,31 @@ Python standard library.
 
 The timestamp advances by one minute per record from a fixed UTC start, making
 the output reproducible along with the seed. The JSON file contains the last
-reading in the generated series; the CSV contains every reading.
+reading in the generated series; the CSV contains every reading. The new
+`skin_temperature_c` feature is independently generated with a dedicated seeded
+random stream, stays the same across vital-sign scenarios, and is not derived
+from the existing ambiguous `body_temperature_c` field. Its integration-only
+assumptions and limits are documented in
+[`docs/data-schema.md`](../docs/data-schema.md).
+
+## Send generated readings to the local backend
+
+Start the backend first. The adapter creates or reuses a synthetic astronaut
+profile, then posts each timestamp using the existing grouped ingestion route:
+
+```powershell
+py data-engine\adapters\backend_ingest.py --readings 60 --scenario normal --seed 42
+```
+
+Use `--api-base-url` or `AEGIS_API_BASE_URL` for a different local backend URL.
+The adapter sends heart rate, SpO2, respiration, and the separately named
+synthetic `skin_temperature_c` with explicit provenance and units. It omits
+`body_temperature_c`; that field is never relabelled as skin temperature.
+Identical repeated seeding reuses existing records; changed values at an
+existing stream timestamp are rejected by the backend rather than overwritten.
+Use `--astronaut-id AST-DEMO-02` to create a second fictional profile. The
+detailed mapping and scientific boundary are in
+[`docs/data-schema.md`](../docs/data-schema.md).
 
 ## Tests
 

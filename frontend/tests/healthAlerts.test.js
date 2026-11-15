@@ -45,42 +45,67 @@ test('head and brain meshes remain independently selectable and unknown meshes s
   assert.equal(getAnatomyRegion(null), null)
 })
 
-test('normal scenario has no alerts and localized alert states clear', () => {
+test('normal scenario has no alerts and has no unsupported region states', () => {
   const snapshot = createDemoSnapshot('normal')
   const result = evaluateSyntheticAlerts(snapshot.readings, { regionAlerts: snapshot.regionAlerts })
 
   assert.deepEqual(result.alerts, [])
-  assert.equal(result.regionStatuses.heart, 'normal')
+  assert.equal(result.regionStatuses.heart, 'no-data')
+  assert.equal(result.regionStatuses.leftLung, 'no-data')
+  assert.equal(result.regionStatuses.rightLung, 'no-data')
   assert.equal(result.regionStatuses.leftArm, 'no-data')
 })
 
-test('heart thresholds recognize configured high and low deviations', () => {
-  assert.equal(evaluateSyntheticAlerts({ heart_rate_bpm: 92 }).regionStatuses.heart, 'warning')
-  assert.equal(evaluateSyntheticAlerts({ heart_rate_bpm: 107 }).regionStatuses.heart, 'critical')
-  assert.equal(evaluateSyntheticAlerts({ heart_rate_bpm: 57 }).regionStatuses.heart, 'warning')
-  assert.equal(evaluateSyntheticAlerts({ heart_rate_bpm: 47 }).regionStatuses.heart, 'critical')
+test('heart-rate thresholds remain global and never localize to the heart', () => {
+  const cases = [
+    [92, 'warning'],
+    [107, 'critical'],
+    [57, 'warning'],
+    [47, 'critical'],
+  ]
+
+  for (const [heartRate, severity] of cases) {
+    const result = evaluateSyntheticAlerts({ heart_rate_bpm: heartRate })
+    assert.equal(result.alerts.length, 1)
+    assert.equal(result.alerts[0].measurementKey, 'heart_rate_bpm')
+    assert.equal(result.alerts[0].scope, 'global')
+    assert.equal(result.alerts[0].region, null)
+    assert.equal(result.alerts[0].severity, severity)
+    assert.equal(result.regionStatuses.heart, 'no-data')
+  }
 })
 
-test('respiratory readings highlight both lungs and not unrelated regions', () => {
+test('SpO2 and respiration alerts remain global and do not highlight either lung', () => {
   const snapshot = createDemoSnapshot('respiratory-alert')
   const result = evaluateSyntheticAlerts(snapshot.readings)
 
-  assert.equal(result.regionStatuses.leftLung, 'critical')
-  assert.equal(result.regionStatuses.rightLung, 'critical')
-  assert.equal(result.regionStatuses.heart, 'normal')
+  assert.deepEqual(result.alerts.map(({ measurementKey, scope, region, severity }) => ({
+    measurementKey,
+    scope,
+    region,
+    severity,
+  })), [
+    { measurementKey: 'spo2_percent', scope: 'global', region: null, severity: 'critical' },
+    { measurementKey: 'respiration_rate_bpm', scope: 'global', region: null, severity: 'critical' },
+  ])
+  assert.equal(result.regionStatuses.leftLung, 'no-data')
+  assert.equal(result.regionStatuses.rightLung, 'no-data')
+  assert.equal(result.regionStatuses.heart, 'no-data')
   assert.equal(result.regionStatuses.leftArm, 'no-data')
   assert.equal(result.regionStatuses.abdomen, 'no-data')
-  assert.equal(result.alerts.length, 4)
 })
 
-test('the most severe concurrent respiratory result controls the region color', () => {
+test('global alert severity does not change lung region status', () => {
   const result = evaluateSyntheticAlerts({
     spo2_percent: 89,
     respiration_rate_bpm: 22,
   })
 
-  assert.equal(result.regionStatuses.leftLung, 'critical')
-  assert.equal(result.regionStatuses.rightLung, 'critical')
+  assert.equal(result.alerts.length, 2)
+  assert.equal(result.alerts[0].severity, 'critical')
+  assert.equal(result.alerts[1].severity, 'warning')
+  assert.equal(result.regionStatuses.leftLung, 'no-data')
+  assert.equal(result.regionStatuses.rightLung, 'no-data')
 })
 
 test('explicit arm scenarios highlight only their named arm', () => {
@@ -93,22 +118,26 @@ test('explicit arm scenarios highlight only their named arm', () => {
   const rightResult = evaluateSyntheticAlerts(right.readings, { regionAlerts: right.regionAlerts })
   assert.equal(rightResult.regionStatuses.rightArm, 'critical')
   assert.equal(rightResult.regionStatuses.leftArm, 'no-data')
+  assert.equal(leftResult.alerts[0].source, 'demo-region-simulation')
+  assert.equal(rightResult.alerts[0].source, 'demo-region-simulation')
 })
 
-test('multiple scenario combines vital and explicit regional alerts', () => {
+test('multiple scenario keeps vital alerts global and highlights only explicit regions', () => {
   const snapshot = createDemoSnapshot('multiple-alerts')
   const result = evaluateSyntheticAlerts(snapshot.readings, { regionAlerts: snapshot.regionAlerts })
 
-  assert.equal(result.regionStatuses.heart, 'critical')
-  assert.equal(result.regionStatuses.leftLung, 'warning')
-  assert.equal(result.regionStatuses.rightLung, 'warning')
+  assert.equal(result.regionStatuses.heart, 'no-data')
+  assert.equal(result.regionStatuses.leftLung, 'no-data')
+  assert.equal(result.regionStatuses.rightLung, 'no-data')
   assert.equal(result.regionStatuses.leftArm, 'warning')
   assert.equal(result.regionStatuses.rightArm, 'critical')
   assert.equal(result.regionStatuses.rightLeg, 'warning')
-  assert.equal(result.alerts.length, 8)
+  assert.equal(result.alerts.length, 6)
+  assert.equal(result.alerts.filter((alert) => alert.scope === 'global').length, 3)
+  assert.equal(result.alerts.filter((alert) => alert.source === 'demo-region-simulation').length, 3)
 })
 
-test('multiple severity sources preserve the highest region severity', () => {
+test('a global heart-rate alert does not override an explicit regional marker', () => {
   const result = evaluateSyntheticAlerts(
     { heart_rate_bpm: 110 },
     {
@@ -123,7 +152,8 @@ test('multiple severity sources preserve the highest region severity', () => {
     },
   )
 
-  assert.equal(result.regionStatuses.heart, 'critical')
+  assert.equal(result.alerts.find((alert) => alert.scope === 'global').severity, 'critical')
+  assert.equal(result.regionStatuses.heart, 'warning')
 })
 
 test('missing and non-finite readings do not produce alerts', () => {
@@ -146,7 +176,9 @@ test('threshold overrides are supported and malformed thresholds are rejected', 
       high: { warning: 10, critical: 20 },
     },
   }
-  assert.equal(evaluateSyntheticAlerts({ heart_rate_bpm: 83 }, { thresholds }).regionStatuses.heart, 'warning')
+  const result = evaluateSyntheticAlerts({ heart_rate_bpm: 83 }, { thresholds })
+  assert.equal(result.alerts[0].severity, 'warning')
+  assert.equal(result.alerts[0].region, null)
   assert.throws(
     () => evaluateSyntheticAlerts({ heart_rate_bpm: 110 }, {
       thresholds: {

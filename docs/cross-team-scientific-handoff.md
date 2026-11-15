@@ -105,6 +105,14 @@ approve an endpoint, model, UI behavior, medical claim, or implementation.
   from the sample formats, generator, and backend measurement schema. If a
   local mock UI displays blood pressure, treat it as a UI fixture rather than
   a shared backend/data-engine measurement.
+- The legacy `body_temperature_c` is left semantically unspecified and omitted
+  from backend ML ingestion. A separate `skin_temperature_c` field is an
+  explicitly synthetic, seeded integration fixture and maps to backend
+  `skin_temperature` only. Its values are not measured astronaut data, a
+  validated sensor series, or an intended-use reference range.
+- Generic HR, SpO2, and respiration alerts remain global. Only explicit,
+  separately supplied `demo-region-simulation` markers can highlight a named
+  region; never infer a heart or lung highlight from those vital signs.
 
 ## Review gates before any scientific product claim
 

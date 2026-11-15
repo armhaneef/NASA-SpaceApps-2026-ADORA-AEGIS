@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useFrame } from '@react-three/fiber'
-import { Html } from '@react-three/drei'
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js'
@@ -9,11 +8,6 @@ import { HEALTH_SEVERITY_COLORS } from './healthAlerts.js'
 
 const MODEL_PATH = '/models/adora-anatomy.glb'
 const TARGET_HEIGHT = 3.1
-
-function describeError(error) {
-  const message = error instanceof Error ? error.message : String(error)
-  return `Unable to load the anatomy model: ${message}`
-}
 
 async function loadModel(signal) {
   const response = await fetch(MODEL_PATH, { signal })
@@ -293,7 +287,6 @@ export default function AnatomyModel({
 }) {
   const [asset, setAsset] = useState(null)
   const [status, setStatus] = useState('loading')
-  const [errorMessage, setErrorMessage] = useState('')
 
   useEffect(() => {
     const controller = new AbortController()
@@ -303,14 +296,12 @@ export default function AnatomyModel({
       .then((gltf) => {
         if (!active) return
         setAsset(gltf.scene)
-        setErrorMessage('')
         setStatus('ready')
       })
       .catch((error) => {
         if (!active || error.name === 'AbortError') return
         const missing = error.status === 404
         setStatus(missing ? 'missing' : 'error')
-        setErrorMessage(describeError(error))
       })
 
     return () => {
@@ -338,18 +329,6 @@ export default function AnatomyModel({
         />
       ) : (
         <FallbackSilhouette />
-      )}
-      {status !== 'ready' && (
-        <Html position={[0, -1.65, 0]} center>
-          <div className={`model-load-message model-load-${status}`} role="status">
-            {status === 'loading'
-              ? 'Loading anatomical model…'
-              : status === 'missing'
-                ? 'Model file not found'
-                : 'Model could not be decoded'}
-            {errorMessage && <small>{errorMessage}</small>}
-          </div>
-        </Html>
       )}
     </group>
   )

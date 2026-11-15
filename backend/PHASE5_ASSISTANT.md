@@ -1,8 +1,7 @@
 # Phase 5: assistant adapter and endpoint
 
-This is a backend-local draft for Member 3 to review. `ai-assistant/README.md`
-currently describes a structure-only module with no callable, provider, prompts,
-or knowledge base. No real assistant integration is claimed. The backend owns
+This documents the implemented backend bridge to Member 3's existing
+`POST /api/v1/assistant/respond` route. The backend owns
 validation, context selection and error handling; Member 3 owns assistant content,
 medical safety rules, approved knowledge retrieval and provider configuration.
 
@@ -122,23 +121,23 @@ limitations has 1–20 nonempty strings up to 1000 each. Unknown fields, non-JSO
 values and nonfinite numbers are rejected. The backend checks identity and
 structure; it cannot certify factual or medical safety from this schema.
 
-After agreement, wire the approved callable in `get_ai_adapter()` or replace
-that FastAPI dependency with a deployment-owned factory. The current factory
-returns an unconfigured adapter. No import name, remote URL or secret is guessed
-or accepted from an incoming request. Merely setting `PYTHONPATH` or selecting
-`mode: "local"` does not configure a provider. There are no provider dependencies
-or secrets to install for mock mode.
+Set `AEGIS_ASSISTANT_URL=http://127.0.0.1:8001` to enable the fixed local HTTP
+bridge. `AEGIS_ASSISTANT_TIMEOUT_SECONDS` controls its request timeout (default
+3 seconds, maximum 30). The URL is configuration only; request data cannot
+choose a host. The bridge sends the exact `astronaut_id`, `question`, and
+`context` shape above, validates the returned schema and identity, and maps
+timeouts/unavailability to safe HTTP errors. `mode: "mock"` remains available
+without starting Member 3's service. The bridge does not claim that an offline
+or mock assistant performed an explanation.
 
-The future provider must enforce its own execution/network deadline and raise
-`TimeoutError` on expiration. The adapter translates that failure; it does not
-forcibly interrupt a stalled Python callable. Async/HTTP provider transport,
-citations/retrieval schema and real timeout behavior require Member 3's contract
-and transport implementation, not a competing assistant inside the backend.
+Member 3's service must run on a separate port because both FastAPI apps
+otherwise default to 8000. Its `LLM_PROVIDER=offline` setting does not provide a
+non-mock answer; a local model such as configured Ollama is needed for that.
 
 ## Verify in PyCharm and /docs
 
 Use `backend/.venv/Scripts/python.exe` as the PyCharm interpreter and `backend`
-as the working directory. No new dependencies are required for this phase.
+as the working directory. The bridge uses the Python standard library.
 From the terminal at the repository root:
 
 ```powershell
@@ -165,8 +164,9 @@ Open http://127.0.0.1:8000/docs and use **Try it out → Execute**:
 2. Execute **POST /ai/assistant** using the first JSON example. Expect 200,
    an answer beginning `MOCK:`, `is_mock: true`, `status: "mock"`, limitations,
    and `context: {"analysis": null}`. No sensor readings are required.
-3. Change mode to `local`. With the current unconfigured provider, expect 503
-   and a clear error, with no successful-looking answer.
+3. Change mode to `local`. Without `AEGIS_ASSISTANT_URL`, expect 503. With the
+   Member 3 service configured but its provider offline, expect a safe 503; no
+   successful-looking answer is returned.
 4. Submit a whitespace-only question: expect 422. Use an unknown astronaut:
    expect 404. The health endpoint should still return `{"status":"ok"}`.
 5. Optionally follow Phase 4 to create an analysis for `AST-AI-DEMO`, add its
@@ -174,8 +174,9 @@ Open http://127.0.0.1:8000/docs and use **Try it out → Execute**:
    context. A mock analysis must remain marked mock with null anomaly values.
    An analysis ID belonging to a different astronaut returns 404.
 
-Tests use temporary databases and provider stubs, not a real assistant. They
+Tests use temporary databases and provider stubs, not a real language model. They
 exercise offline mock operation, validation, minimal context, mock provenance,
 uncertainty, provider mutation isolation, safe errors, OpenAPI, and no database
 writes. Real provider content, retrieval, safety behavior and enforced deadlines
-remain unverified until Member 3 supplies the agreed implementation.
+remain unverified until a configured local model returns an actual response over
+the HTTP bridge.

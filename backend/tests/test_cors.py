@@ -30,6 +30,13 @@ def test_approved_preflight(client, method):
     assert "access-control-allow-credentials" not in response.headers
 
 
+@pytest.mark.parametrize("origin", ["http://localhost:5173", "http://localhost:5175"])
+def test_both_vite_origins_are_approved_by_default(client, origin):
+    response = preflight(client, origin=origin)
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == origin
+
+
 @pytest.mark.parametrize("origin", ["http://127.0.0.1:5173", "http://localhost:5174",
                                     "https://localhost:5173", "https://unapproved.example", "null"])
 def test_unapproved_origin(client, origin):
@@ -90,7 +97,7 @@ def test_empty_allowlist_disables_cors(monkeypatch):
 
 def test_default_settings(monkeypatch):
     monkeypatch.delenv("AEGIS_CORS_ORIGINS", raising=False)
-    assert load_settings().cors_origins == (ORIGIN,)
+    assert load_settings().cors_origins == (ORIGIN, "http://localhost:5175")
 
 
 @pytest.mark.parametrize("value", ["*", '["*"]', '["http://*.example.com"]',

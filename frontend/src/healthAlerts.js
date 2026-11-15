@@ -33,16 +33,16 @@ const localizedAlert = (region, severity, reason) => ({
 })
 
 export const DEMO_SCENARIOS = Object.freeze([
-  { id: 'normal', label: 'Normal', readings: {} },
-  { id: 'heart-alert', label: 'Heart alert', readings: { heart_rate_bpm: 110 } },
+  { id: 'normal', label: 'Baseline (synthetic demo)', readings: {} },
+  { id: 'heart-alert', label: 'Heart-rate alert · global demo', readings: { heart_rate_bpm: 110 } },
   {
     id: 'respiratory-alert',
-    label: 'Respiratory alert',
+    label: 'SpO₂ + respiration alerts · global demo',
     readings: { spo2_percent: 89, respiration_rate_bpm: 28 },
   },
   {
     id: 'left-arm-alert',
-    label: 'Left arm alert',
+    label: 'Left-arm marker · localized synthetic',
     readings: {},
     regionAlerts: [
       localizedAlert('leftArm', 'warning', 'Explicit left-arm demo marker for region-visualization testing.'),
@@ -50,7 +50,7 @@ export const DEMO_SCENARIOS = Object.freeze([
   },
   {
     id: 'right-arm-alert',
-    label: 'Right arm alert',
+    label: 'Right-arm marker · localized synthetic',
     readings: {},
     regionAlerts: [
       localizedAlert('rightArm', 'critical', 'Explicit right-arm demo marker for region-visualization testing.'),
@@ -58,7 +58,7 @@ export const DEMO_SCENARIOS = Object.freeze([
   },
   {
     id: 'multiple-alerts',
-    label: 'Multiple alerts',
+    label: 'Multiple global + localized synthetic markers',
     readings: {
       heart_rate_bpm: 110,
       spo2_percent: 94,
@@ -90,19 +90,16 @@ const MEASUREMENT_RULES = [
     key: 'heart_rate_bpm',
     label: 'Heart rate',
     unit: 'bpm',
-    regions: ['heart'],
   },
   {
     key: 'spo2_percent',
     label: 'SpO₂',
     unit: '%',
-    regions: ['leftLung', 'rightLung'],
   },
   {
     key: 'respiration_rate_bpm',
     label: 'Respiration rate',
     unit: '/min',
-    regions: ['leftLung', 'rightLung'],
   },
 ]
 
@@ -182,15 +179,6 @@ export function evaluateSyntheticAlerts(
   const regionStatuses = Object.fromEntries(REGION_KEYS.map((region) => [region, 'no-data']))
   const alerts = []
 
-  if (Number.isFinite(sourceReadings.heart_rate_bpm)) regionStatuses.heart = 'normal'
-  if (
-    Number.isFinite(sourceReadings.spo2_percent)
-    || Number.isFinite(sourceReadings.respiration_rate_bpm)
-  ) {
-    regionStatuses.leftLung = 'normal'
-    regionStatuses.rightLung = 'normal'
-  }
-
   for (const rule of MEASUREMENT_RULES) {
     const value = sourceReadings[rule.key]
     const baseline = HEALTH_BASELINE[rule.key]
@@ -198,22 +186,21 @@ export function evaluateSyntheticAlerts(
     if (!severity) continue
 
     const difference = value - baseline
-    for (const region of rule.regions) {
-      alerts.push({
-        id: `${rule.key}-${region}`,
-        region,
-        severity,
-        source: 'demo-threshold',
-        measurement: rule.label,
-        value,
-        unit: rule.unit,
-        baseline,
-        deviation: difference,
-        reason: `${rule.label} is outside the configured synthetic demo range for this region.`,
-        explanation: 'This threshold comparison is a visualization demo, not a medical assessment.',
-      })
-      updateRegionStatus(regionStatuses, region, severity)
-    }
+    alerts.push({
+      id: rule.key,
+      region: null,
+      scope: 'global',
+      measurementKey: rule.key,
+      severity,
+      source: 'demo-threshold',
+      measurement: rule.label,
+      value,
+      unit: rule.unit,
+      baseline,
+      deviation: difference,
+      reason: `${rule.label} is outside the configured synthetic demo threshold. This global vital-sign alert is not localized to anatomy.`,
+      explanation: 'This threshold comparison is a synthetic educational demo, not a medical assessment.',
+    })
   }
 
   for (const alert of getValidatedRegionAlerts(regionAlerts)) {

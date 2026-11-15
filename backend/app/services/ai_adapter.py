@@ -4,7 +4,10 @@ import json
 from collections.abc import Callable
 from copy import deepcopy
 from datetime import datetime, timezone
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 
+from app.core.config import load_settings
 from app.schemas.assistant import AssistantProviderRequest, AssistantProviderResponse
 from app.schemas.assistant import AssistantResponse
 from app.services.errors import AssistantResponseError, AssistantTimeoutError, AssistantUnavailableError
@@ -56,11 +59,36 @@ class AIAdapter:
         )
 
 
-def get_ai_adapter() -> AIAdapter:
-    """Unconfigured until Member 3 confirms the provider contract.
+def _member3_provider(base_url: str, timeout: float) -> Callable[[dict], dict]:
+    """Call Member 3's existing backend-compatible route over localhost HTTP."""
+    endpoint = f"{base_url.rstrip('/')}/api/v1/assistant/respond"
 
-    Replace this factory with AIAdapter(provider=approved_callable), or use a
-    FastAPI dependency override. Never select an arbitrary module or URL from
-    an incoming assistant request.
-    """
-    return AIAdapter()
+    def call(payload: dict) -> dict:
+        request = Request(
+            endpoint,
+            data=json.dumps(payload, allow_nan=False).encode("utf-8"),
+            method="POST",
+            headers={"Content-Type": "application/json"},
+        )
+        try:
+            with urlopen(request, timeout=timeout) as response:
+                raw = response.read()
+                return json.loads(raw)
+        except HTTPError as exc:
+            raise RuntimeError(f"Member 3 assistant returned HTTP {exc.code}") from exc
+        except TimeoutError as exc:
+            raise TimeoutError("Member 3 assistant request failed") from exc
+        except URLError as exc:
+            raise RuntimeError("Member 3 assistant service is unavailable") from exc
+
+    return call
+
+
+def get_ai_adapter() -> AIAdapter:
+    """Use Member 3's fixed local endpoint only when explicitly configured."""
+    settings = load_settings()
+    provider = (
+        _member3_provider(settings.assistant_base_url, settings.assistant_timeout_seconds)
+        if settings.assistant_base_url else None
+    )
+    return AIAdapter(provider=provider)
