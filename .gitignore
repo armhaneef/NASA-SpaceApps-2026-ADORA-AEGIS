@@ -231,6 +231,19 @@ dist/
 *.sqlite
 *.sqlite3
 *.db
+# SQLite rollback journals, write-ahead logs and shared-memory files
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite3-journal
+*.sqlite3-wal
+*.sqlite3-shm
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Local integration worktrees, QA tooling and evidence (repository root only)
+/.integration/
 
 # Temporary and editor files
 *.tmp

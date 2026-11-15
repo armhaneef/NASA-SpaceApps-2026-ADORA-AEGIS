@@ -3,6 +3,11 @@
 The backend owns the HTTP API boundary, SQLite storage, validated synthetic
 sensor ingestion, local ML analysis, and the optional assistant bridge.
 
+The integrated backend runs on port **8000**; Member 3's separate AI service
+runs on **8002**. The phase sections retain development history; current
+acceptance evidence is in [the integration QA record](../docs/aegis-final-integration-qa.md).
+All example data is synthetic, not NASA telemetry or clinically validated.
+
 **Inputs:** HTTP requests and validated numeric sensor records. Shared conventions
 are in [`docs/data-schema.md`](../docs/data-schema.md); the implemented backend
 formats and required provenance extensions are in [PHASE3_API.md](PHASE3_API.md).
@@ -14,12 +19,13 @@ synthetic demonstration; FastAPI's OpenAPI schema remains authoritative.
 
 ## Phase 1 setup in PyCharm
 
-Python 3.12 is available locally and is compatible with this backend. Keep the
-backend environment separate from other modules. From the repository root:
+Use an installed Python compatible with the declared dependencies (the current
+QA used Python 3.13). Keep environments separate; create the backend environment
+only if it does not already exist. From the repository root:
 
 ```powershell
 cd backend
-py -3.12 -m venv .venv
+py -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
 .\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
@@ -58,8 +64,10 @@ dependencies are separate from runtime dependencies.
 Phase 3 adds astronaut CRUD, validated ingestion, latest readings, and history
 on top of Phase 2 storage. Phase 4 adds a labelled mock/local ML adapter and saved
 analyses. Phase 5 adds an assistant boundary with labelled mock replies and a
-replaceable provider adapter. Real AI content and clinical functionality are not
-implemented. No other module is required to start this server or use mock mode.
+provider adapter. Generation belongs to the separate AI service on port 8002;
+the backend validates and forwards only a minimal summary. Full browser-to-Gemini
+generation remains unverified, and no clinical functionality is claimed. No
+other module is required to start this server or use explicit mock mode.
 
 The grouped ingestion contract accepts the existing fields plus an additive
 `skin_temperature` field (`degC`). The Data Engine maps only its separate,
@@ -235,7 +243,8 @@ real engine remains owned by Member 2 and is not modified or duplicated here.
 
 `POST /ai/assistant` accepts an astronaut ID, question, optional selected analysis
 ID, and explicit mock/local mode. Mock mode returns a static labelled placeholder
-offline. Local mode returns 503 until Member 3's approved provider is wired in.
+offline. Local mode uses the configured HTTP bridge to Member 3 on port 8002;
+an unavailable service or provider returns a safe 503, not a mock success.
 No conversations are stored and no database schema or dependency changes are
 needed. Selected context preserves analysis provenance and uncertainty while
 excluding profile metadata, raw readings, and sensor history.
@@ -273,12 +282,27 @@ $env:AEGIS_CORS_ORIGINS = '["http://localhost:5173","http://localhost:5175"]'
 
 Run from `backend` using its existing interpreter. `.env.example` documents the
 setting; an `.env` file is loaded only when explicitly passed with `--env-file`.
-No database schema, route path or success-response shape changed. To connect
-Member 3's service uses `AI_ASSISTANT_URL=http://127.0.0.1:8002/api/v1/assistant/respond`
-and `AI_ASSISTANT_TIMEOUT_SECONDS=70` by default. Set the URL explicitly blank
-to disable the bridge. These backend changes require Member 4 review. See
+No database schema, route path or success-response shape changed. The bridge
+defaults to `AI_ASSISTANT_URL=http://127.0.0.1:8002/api/v1/assistant/respond`
+and `AI_ASSISTANT_TIMEOUT_SECONDS=70`. These backend changes require Member 4 review. See
 [PHASE5_ASSISTANT.md](PHASE5_ASSISTANT.md) and the root README for Windows
-commands. Leave the URL unset to keep only the explicit backend mock mode.
+commands. The actual configuration precedence is:
+
+- An explicitly blank `AI_ASSISTANT_URL` disables the bridge. Local-mode
+  requests then return 503; explicit mock requests remain available.
+- When `AI_ASSISTANT_URL` is omitted, legacy `AEGIS_ASSISTANT_URL`, if present,
+  supplies a base URL with `/api/v1/assistant/respond` appended; a blank legacy
+  value also disables it.
+- When both URL settings are omitted, the port-8002 default above is active.
+  This does not automatically generate: only a submitted `mode: local` request
+  invokes it. Automatic dashboard explanations use mock mode.
+
+Provider connect/read timeouts are at most 5/70 seconds by default; the browser
+allows 90 seconds. Provider/schema/identity failures remain 503/502 errors,
+and transport/upstream timeouts are 504. Controlled stub responses verify the
+contract only; they do not establish real Gemini acceptance. Keep credentials
+in the AI service, not this backend or Vite. Development CORS is not user
+authorization; keep the prototype on loopback.
 
 ### Implemented endpoint inventory
 

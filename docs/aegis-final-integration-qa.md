@@ -1,6 +1,132 @@
 # AEGIS full-system integration QA — 2026-11-15
 
-## Delivery checkpoint
+## Current checkpoint and scope
+
+The integration HEAD before this correction pass is
+`37e2dddd6af62c9d08696e32939a7f1e8ae1942a` (`37e2ddd`), on
+`feature/aegis-final-full-integration`. The pass began with a clean working tree.
+The committed anatomy/astronaut-marker implementation is retained. This later
+security/documentation correction remains uncommitted for independent Copilot
+review; no commit, push, merge, PR creation or PR #15 change is authorized here.
+
+**Real full browser-to-Gemini generation: NOT VERIFIED.** Documentation and
+mock/stub integration evidence do not close that acceptance gate. Resolve any
+independent review findings, obtain separate approval for live acceptance if
+required, and obtain publication approval before GitHub delivery.
+
+## Evidence ledger: earlier verification versus this pass
+
+The pre-correction results below were independently executed in earlier review/
+QA turns against `37e2ddd` (or the identical pre-commit anatomy implementation).
+They are not silently presented as fresh executions during this correction.
+
+| Check | Earlier independently verified result | Personally rerun during this correction pass |
+|---|---|---|
+| Data engine | 15 tests + 9 subtests, 0 failed/skipped | Not rerun; implementation unchanged |
+| Backend | 180 passed, 0 failed/skipped | **180 passed**, 0 failed/skipped |
+| ML engine | 77 passed, 0 failed/skipped | Standalone suite not rerun; real ML also exercised by backend/workflow tests |
+| AI Assistant | 69 passed, 0 failed/skipped | **113 passed**, 0 failed/skipped: original 69 + 44 CORS regressions |
+| Frontend unit/contract/anatomy tests | 46 passed, 0 failed/skipped | **46 passed**, 0 failed/skipped |
+| Existing anatomy browser checks | 30 passed (25 + 5) | Not rerun; frontend/model unchanged |
+| New drawer/astronaut browser regressions | 23 passed in one clean execution, 0 failed/skipped | Not rerun; frontend/model unchanged |
+| Additional disposable integration workflow | 15 checks passed | **15 checks passed**, 0 failed; stub LLM only |
+| Frontend lint and production build | Passed; existing bundle warning | Not rerun; frontend/package files unchanged |
+
+The earlier main-suite total is 387 tests plus 9 data subtests; it excludes
+browser checks and the additional 15 workflow checks. It is a prior checkpoint
+aggregate, not a claim that every suite was rerun after this correction. The
+older 375-test/34-frontend and 27-browser figures are retained only in the
+explicit historical record below; do not add overlapping historical browser
+counts to the current 30 + 23 evidence groups.
+
+The initial new CORS test execution found acceptance of empty user-info syntax
+(`http://@localhost`). Original URL components are now checked as well as
+normalized URLs; the complete AI suite was rerun and passed all 113 tests.
+This was a development finding, not a waived test failure.
+
+Python tests used existing isolated environments (backend pytest 9.2.0 and
+AI pytest 8.4.2). An external QA launcher suppressed private dotenv loading,
+removed provider credentials from the test process, blocked external/live
+provider connections, and allowed disposable loopback HTTP fixtures. The AI
+suite's temporary dotenv fixture remained permitted. No private `.env` file
+was read, printed or modified; no Gemini/live chat request was made.
+
+The 15-check workflow used 40 generated records, a temporary SQLite database,
+real Isolation Forest trained on 39 earlier records, persisted/retrieved
+analysis, and the actual backend HTTP bridge to a disposable AI app with a
+stub LLM. It checked explicit mock bypass, minimal context, unknown analysis,
+policy refusal, provider failure and service outage. Stub replies deliberately
+exercise non-mock-labelled response contracts; they are not real generation.
+Backend/AI contract suites cover malformed responses, identity mismatches,
+502/503/504 behavior, provenance and sanitized errors.
+
+## Current security corrections
+
+AI CORS keeps explicit development defaults when `AI_ALLOWED_ORIGINS` is
+omitted. A configured list must contain valid explicit HTTP(S) origins;
+wildcards, empty entries, credentials, paths, queries and fragments fail at
+startup. Credentialed CORS is disabled because these JSON routes do not use
+cookie/session authentication. Regression tests check allowed responses,
+unauthorized preflight rejection and invalid-configuration import failure.
+Backend CORS and provider configuration behavior are unchanged.
+
+Repository ignore rules now include SQLite journal/WAL/SHM sidecars and a
+root-anchored `/.integration/` rule. **24 safe path probes passed**, including
+source/docs/example-template visibility. The integration match comes from the
+tracked `.gitignore`, not just a machine-local Git exclude. Existing local
+exclude settings and worktrees were not changed.
+
+Documentation checks passed for 32 local links/anchors in the six changed
+Markdown files. All 11 documented AI routes match the source; frontend scripts,
+environment names and explicit Vite flags were checked against local code/CLI.
+`git diff --check` passed, as did final-newline/trailing-whitespace checks on
+all 10 changed/new files. The changed-file security scan detected no credential
+patterns or private environment-file changes. These are local checks, not a
+fresh vulnerability-database audit.
+
+## Live acceptance ledger and limits
+
+- **Two previous integration live acceptance attempts returned HTTP 503**, as
+  reported for this checkout. This pass did not repeat them and does not infer
+  a provider/credential/billing cause from the status alone. They are distinct
+  from intentionally mocked 503 tests.
+- Previous read-only checks returned HTTP 200 for backend `/health` on 8000
+  and AI `/api/v1/health` on 8002; the latter reported `configured`. These are
+  service/configuration observations, not proof of a valid key or generation.
+- Earlier Member 3 reports describe component-level Gemini chat successes in
+  another verification context. They do not prove the current complete
+  `React -> :8000/ai/assistant -> :8002/api/v1/assistant/respond -> Gemini -> UI`
+  path. Retain them as historical evidence, not current acceptance.
+- Missing analysis remains unknown. Explicit mock/offline text, controlled
+  stubs, safety refusals and non-mock flags alone do not prove real Gemini.
+  A separately approved live acceptance must observe the complete path,
+  matching astronaut, actual provider configuration, nonempty answer and
+  limitations, provenance and browser rendering. No key belongs in a report.
+
+## Non-blocking limitations
+
+All data is fabricated educational input, not NASA astronaut telemetry, and
+neither ML nor anatomy is medically/clinically validated. Global findings are
+not localized. See [anatomy geometry and marker limits](anatomy-layer-improvements.md):
+128 meshes include 34 organ-group meshes, not 34 distinct organs; face/scalp
+muscles, segmented regional skin and a standalone abdomen mesh are absent.
+
+Physical mobile-device performance is not benchmarked. The model has over a
+million triangles; the existing frontend bundle warning remains (about 1.66 MB
+minified / 466 kB gzip). Previous Chrome/SwiftShader checks are not hardware
+benchmarks. Backend tests retain the Starlette TestClient/httpx deprecation;
+AI tests additionally retain SpeechRecognition's `aifc` deprecation. These are
+warnings, not failures. Hardware microphone capture/audible speech remains
+unverified. Local-only dependency checks do not constitute fresh CVE clearance.
+
+## Historical integration record: 743aa11, before anatomy and later acceptance attempts
+
+The following original report is preserved as historical evidence. Its
+34-frontend/375-total, 27-browser, offline-health and no-attempt statements refer
+to that earlier checkpoint, not the current record above. Statements about
+unchanged Member 3 files and pending wiring describe that phase's scope.
+
+### Delivery checkpoint
 
 **BLOCKED: real Gemini acceptance and GitHub delivery.** The Team Lead is
 configuring Gemini privately. No cloud generation was requested during this
@@ -9,7 +135,7 @@ before exactly one synthetic educational question is submitted through the UI.
 The feature branch remains local until that acceptance gate is satisfied.
 No PR was created; neither `dev`, `main`, nor PR #15 was merged or modified.
 
-## Source preservation and ancestry
+### Source preservation and ancestry
 
 - Integration branch: `feature/aegis-final-full-integration`.
 - Isolated checkout: `.integration/full-system` under the original workspace.
@@ -36,7 +162,7 @@ See [the complete changed-file manifest](aegis-final-integration-files.txt)
 for all files changed relative to the integrated dev head, including inherited
 UI/data/backend work.
 
-## Backend and frontend integration
+### Backend and frontend integration
 
 **COMPLETE AND VERIFIED** with fake HTTP/provider transports and offline
 running services:
@@ -69,7 +195,7 @@ Backend changes require **Member 4 review**. Member 3's schema is unchanged;
 Member 3 should confirm the configured provider/model and timeout for live
 acceptance. Any future provider-identity schema extension needs coordination.
 
-## Automated test results
+### Automated test results
 
 | Suite | Result | Notes |
 |---|---:|---|
@@ -95,7 +221,7 @@ child-process spawning. The AI suite also passed with isolated pytest 8.4.2,
 within its requirements range. Shared package environments were preserved;
 SDK/QA tooling was installed separately under ignored `.integration/`.
 
-## Running-service and browser evidence
+### Running-service and browser evidence
 
 **COMPLETE AND VERIFIED:** synthetic generation -> backend HTTP ingestion ->
 separate SQLite QA database -> local ML analysis -> saved non-mock algorithmic
@@ -134,7 +260,7 @@ unavailable and speech-output capability present. Hardware microphone capture
 and actual audible speech output are **IMPLEMENTED BUT NOT VERIFIED** here.
 Voice route/service tests use controlled fixtures.
 
-## Real Gemini acceptance and remaining gate
+### Real Gemini acceptance and remaining gate
 
 **IMPLEMENTED BUT NOT VERIFIED:** the final `Member 3 -> Gemini -> UI` leg.
 Health on port 8002 currently reports `offline`, `llm_available:false`, seven

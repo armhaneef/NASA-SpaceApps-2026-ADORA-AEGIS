@@ -1,9 +1,13 @@
 # Anatomy layers and regional markers — 2026-11-15
 
 Implemented in the existing `feature/aegis-final-full-integration` checkout.
-Base commit remains `743aa11c9155c36c7889b0f9c8ae1870b054d6af`. These changes
-are **uncommitted**, awaiting Haneef's approval. No push, merge, PR #15 change,
-private environment-file change, model download or live Gemini request occurred.
+The anatomy and marker improvements are committed at
+`37e2dddd6af62c9d08696e32939a7f1e8ae1942a`, based on integration commit
+`743aa11c9155c36c7889b0f9c8ae1870b054d6af`. Earlier versions of this report
+described the pre-commit worktree; that historical status is superseded here.
+The later security/documentation correction pass is uncommitted for review.
+No push, merge, PR #15 change, private environment-file change, replacement
+model download or live Gemini request was made by the correction pass.
 
 ## Verified asset availability
 
@@ -24,6 +28,8 @@ The existing `frontend/public/models/adora-anatomy.glb` is unchanged:
 | Vessels | 22 | Original named vessel structures retained in FULL BODY |
 | Nerves | 2 | `spinal_cord`, `cranial_nerves` retained in FULL BODY |
 
+These are **34 organ-group meshes, not 34 distinct organs**: named groups can
+contain composite structures, and brain components share one selection.
 The 34 organ-group mesh names are:
 
 ```text
@@ -77,8 +83,25 @@ organs' opacity and rotation remains available.
 All ten existing scenarios are preserved. The details panel adds an explicit
 marker editor for the selected available region/organ in DEMO MODE, allowing
 left-leg warnings and organ-specific markers without replacing a scenario.
-Added markers coexist; changing the scenario clears only this demonstration
-overlay. Selection and layer switching never clear active markers.
+Added markers coexist and are scoped by astronaut ID. Each astronaut has an
+independent custom-marker count and regional colors. Adding, editing severity
+or clearing a marker changes only the selected astronaut's custom bucket.
+Switching from A-01 to A-02 does not inherit A-01's markers; returning to A-01
+restores its markers during the current application session. These overlays
+are not persisted to the backend or across page reloads.
+
+Changing the scenario clears only the selected astronaut's custom overlay;
+other astronauts retain their buckets. The explicit scenario remains a global
+demo choice and is not an astronaut-specific sensor record. Selection, all
+four anatomy layers and camera reset preserve the selected astronaut's markers.
+Global vital-sign or ML anomalies are never converted to localized markers.
+
+The mobile details drawer includes visible keyboard-focusable summaries and
+excludes closed-details contents, hidden/disabled/inert controls and negative
+tab stops. Tab and Shift+Tab wrap inside the modal in both directions, with
+focus containment even after a programmatic outside-focus attempt. Close,
+Escape, backdrop and touch closure restore the opener (or available toggle).
+Both collapsed and expanded marker editors are covered by browser regressions.
 
 Colors: cyan normal/unmarked **demo reference**, yellow warning, red critical,
 neutral grey for unknown regional data in LIVE API MODE. Cyan never certifies
@@ -106,9 +129,20 @@ drawer and keyboard access are retained.
 | Existing plus new frontend tests | **46 passed**, 0 failed, skipped or cancelled |
 | Main desktop/mobile Chrome suite | **25 passed** |
 | Additional camera, controls and missing-brain browser checks | **5 passed** |
+| Independent drawer and astronaut-marker browser regressions | **23 passed in one clean execution**, 0 failed/skipped |
 | `npm.cmd --prefix frontend run lint` | Passed |
 | `npm.cmd --prefix frontend run build` | Passed |
 | `git diff --check` | Passed |
+
+This table records the independently executed pre-correction anatomy review at
+`37e2ddd`. The 23-check regression harness is tracked at
+`frontend/tests/reviewFindings.browser.mjs`; it tests actual focus targets,
+independent counts, actual mesh colors, edit/removal isolation, layer/camera
+reset semantics and all ten scenarios. The 30 other anatomy checks and these
+23 checks were not rerun during the later CORS/documentation correction pass;
+frontend source/model files were unchanged. See the
+[current integration QA record](aegis-final-integration-qa.md) for that pass's
+personally rerun tests, distinct from this retained browser evidence.
 
 Tests cover decoded asset availability, layers, unchanged organ transforms,
 head references, individual markers, multiple markers, global-only alerts,
@@ -139,7 +173,7 @@ The existing large-bundle build warning remains (about 1.66 MB minified /
 over a million triangles; low-end mobile hardware frame rate is not benchmarked.
 No physical regional sensors or clinical validation are provided.
 
-## Modified files
+## Historical anatomy change manifest
 
 1. `frontend/src/AnatomyModel.jsx`
 2. `frontend/src/anatomyScene.js` (new)
@@ -154,5 +188,9 @@ No physical regional sensors or clinical validation are provided.
 11. `docs/anatomy-mesh-inventory.json` (new)
 12. `docs/anatomy-layer-improvements.md` (this report)
 
-No files are staged, committed or pushed for this task. Review and approval
-are the remaining gate before any Git delivery action.
+The original 12-file manifest above describes the anatomy implementation.
+Commit `37e2ddd` also includes `frontend/tests/reviewFindings.browser.mjs` and
+the two reviewed fixes in `frontend/src/App.jsx`. It is no longer an
+uncommitted anatomy patch. The current correction pass remains unstaged and
+uncommitted pending independent review and approval; no Git delivery is
+authorized by this report.
