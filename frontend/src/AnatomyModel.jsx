@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useFrame } from '@react-three/fiber'
-import { Html } from '@react-three/drei'
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js'
@@ -9,11 +8,6 @@ import { HEALTH_SEVERITY_COLORS } from './healthAlerts.js'
 
 const MODEL_PATH = '/models/adora-anatomy.glb'
 const TARGET_HEIGHT = 3.1
-
-function describeError(error) {
-  const message = error instanceof Error ? error.message : String(error)
-  return `Unable to load the anatomy model: ${message}`
-}
 
 async function loadModel(signal) {
   const response = await fetch(MODEL_PATH, { signal })
@@ -233,7 +227,7 @@ function FallbackSilhouette() {
   )
 }
 
-function LoadedModel({ scene, mode, layer, selected, regionStatuses, onSelect, onModelInfo }) {
+function LoadedModel({ scene, mode, layer, selected, regionStatuses, onSelect, onModelInfo, reducedMotion }) {
   const model = useMemo(() => getCloneModel(scene), [scene])
   const criticalMaterials = useRef([])
 
@@ -242,6 +236,7 @@ function LoadedModel({ scene, mode, layer, selected, regionStatuses, onSelect, o
   }, [model, mode, regionStatuses, selected, layer])
 
   useFrame(({ clock }) => {
+    if (reducedMotion) return
     const pulse = 0.82 + Math.sin(clock.elapsedTime * 5) * 0.18
     criticalMaterials.current.forEach((material) => {
       material.emissiveIntensity = material.userData.aegisAlertIntensity * pulse
@@ -290,10 +285,10 @@ export default function AnatomyModel({
   onSelect,
   onStatusChange,
   onModelInfo,
+  reducedMotion = false,
 }) {
   const [asset, setAsset] = useState(null)
   const [status, setStatus] = useState('loading')
-  const [errorMessage, setErrorMessage] = useState('')
 
   useEffect(() => {
     const controller = new AbortController()
@@ -303,14 +298,12 @@ export default function AnatomyModel({
       .then((gltf) => {
         if (!active) return
         setAsset(gltf.scene)
-        setErrorMessage('')
         setStatus('ready')
       })
       .catch((error) => {
         if (!active || error.name === 'AbortError') return
         const missing = error.status === 404
         setStatus(missing ? 'missing' : 'error')
-        setErrorMessage(describeError(error))
       })
 
     return () => {
@@ -335,21 +328,10 @@ export default function AnatomyModel({
           regionStatuses={regionStatuses}
           onSelect={onSelect}
           onModelInfo={onModelInfo}
+          reducedMotion={reducedMotion}
         />
       ) : (
         <FallbackSilhouette />
-      )}
-      {status !== 'ready' && (
-        <Html position={[0, -1.65, 0]} center>
-          <div className={`model-load-message model-load-${status}`} role="status">
-            {status === 'loading'
-              ? 'Loading anatomical model…'
-              : status === 'missing'
-                ? 'Model file not found'
-                : 'Model could not be decoded'}
-            {errorMessage && <small>{errorMessage}</small>}
-          </div>
-        </Html>
       )}
     </group>
   )

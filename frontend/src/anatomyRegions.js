@@ -26,7 +26,7 @@ const ABDOMEN_MESHES = new Set([
 ])
 
 const ARM_PARTS = /arm|shoulder|forearm|hand|deltoid|biceps|triceps|humerus|radius|ulna|wrist|clavicle/i
-const LEG_PARTS = /leg|foot|thigh|calf|femur|tibia|fibula|patella|ankle|knee|hip/i
+const LEG_PARTS = /leg|foot|thigh|calf|femur|tibia|fibula|patella|ankle|knee|hip|shin|adductor|hamstring|quadriceps|gluteal|iliopsoas/i
 
 export function getAnatomyRegion(name) {
   if (typeof name !== 'string') return null

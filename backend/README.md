@@ -1,8 +1,7 @@
 # Backend
 
-The backend owns the HTTP API boundary. Its initial FastAPI application exposes
-a health check so the service can be started and checked before other modules
-are integrated.
+The backend owns the HTTP API boundary, SQLite storage, validated synthetic
+sensor ingestion, local ML analysis, and the optional assistant bridge.
 
 **Inputs:** HTTP requests and validated numeric sensor records. Shared conventions
 are in [`docs/data-schema.md`](../docs/data-schema.md); the implemented backend
@@ -10,8 +9,8 @@ formats and required provenance extensions are in [PHASE3_API.md](PHASE3_API.md)
 
 **Outputs:** JSON responses described below and in
 [FRONTEND_INTEGRATION.md](FRONTEND_INTEGRATION.md). The shared
-[`docs/api-contracts.md`](../docs/api-contracts.md) still documents only the initial
-health endpoint and has not been edited by backend development.
+[`docs/api-contracts.md`](../docs/api-contracts.md) lists the routes used by the
+synthetic demonstration; FastAPI's OpenAPI schema remains authoritative.
 
 ## Phase 1 setup in PyCharm
 
@@ -62,11 +61,12 @@ analyses. Phase 5 adds an assistant boundary with labelled mock replies and a
 replaceable provider adapter. Real AI content and clinical functionality are not
 implemented. No other module is required to start this server or use mock mode.
 
-The shared health contract is preserved. Before ingestion implementation, resolve
-the difference between `docs/data-schema.md` (grouped readings, e.g. `beats/min`)
-and the proposed per-measurement format (`bpm`, source and simulation metadata)
-with the team lead. The root README's member assignments also differ from the
-current backend assignment. These shared files have not been changed.
+The grouped ingestion contract accepts the existing fields plus an additive
+`skin_temperature` field (`degC`). The Data Engine maps only its separate,
+explicitly synthetic `skin_temperature_c` fixture to that type; it omits the
+legacy `body_temperature_c` field. Exact ingestion retries reuse stored rows
+with HTTP 200, while a changed reading under the same stream identity returns
+HTTP 409 without overwriting data.
 
 ## Phase 2: local storage
 
@@ -77,11 +77,13 @@ Install the updated dependencies and start the app from `backend`:
 .\.venv\Scripts\python.exe -m uvicorn app.main:app --reload
 ```
 
-Startup creates missing tables in `backend/aegis.sqlite3`. The path is based on
-the source file, so changing the terminal working directory cannot put the
-database in another module. SQLite is included with Python; no database server
-or internet connection is needed after installation. The database file is
-ignored by the repository's existing Git rules.
+Startup creates missing tables in `backend/aegis.sqlite3` by default. Set
+`AEGIS_DATABASE_PATH` to an absolute SQLite file path before importing the app
+to use an isolated database. If an existing database has duplicate reading
+identities, startup preserves every row and skips adding the unique index;
+new ingestion still checks for duplicates and conflicts. SQLite is included
+with Python; no database server or internet connection is needed after
+installation.
 
 - `app/database/connection.py`: engine (database connection configuration),
   initialization, and a session dependency for future routes. A session groups
@@ -144,17 +146,15 @@ the automated tests do not. Phase 3 now exposes astronaut and sensor endpoints
 in `/docs` as described below.
 
 `create_all()` creates missing tables but does not migrate existing table
-definitions. Future schema changes will need an explicit migration plan.
+definitions. Startup adds an identity index only when existing readings do not
+conflict; this is non-destructive and does not replace or remove stored data.
 Standalone baseline and alert tables remain for later phases; Phase 4 stores
-ML baselines within complete analysis snapshots. The internal normalized
-reading model is a backend draft, not a change to the shared ingestion contract;
-mapping shared records and confirming units/provenance with Member 1 comes
-before ingestion. No other team member's implementation is needed for Phase 2.
+ML baselines within complete analysis snapshots.
 
 ## Phase 3: verify the REST APIs in PyCharm
 
 Use `backend/.venv/Scripts/python.exe` as the interpreter and `backend` as the
-working directory. No new dependencies or database schema migration is needed.
+working directory. No new runtime dependency is required.
 From the repository root in the PyCharm terminal:
 
 ```powershell
@@ -260,19 +260,24 @@ described below.
 
 ## Phase 6: frontend integration preparation
 
-CORS now permits the approved React origin `http://localhost:5173` by default.
+CORS now permits the approved React origins `http://localhost:5173` and
+`http://localhost:5175` by default.
 `AEGIS_CORS_ORIGINS` accepts a JSON array of explicit origins and replaces the
 default; wildcard origins are rejected. Credentials are disabled. Configure this
 in the PyCharm Run Configuration or terminal, and restart the backend after changes:
 
 ```powershell
-$env:AEGIS_CORS_ORIGINS = '["http://localhost:5173"]'
+$env:AEGIS_CORS_ORIGINS = '["http://localhost:5173","http://localhost:5175"]'
 .\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
 Run from `backend` using its existing interpreter. `.env.example` documents the
 setting; an `.env` file is loaded only when explicitly passed with `--env-file`.
-No dependency, database schema, route path or success-response shape changed.
+No database schema, route path or success-response shape changed. To connect
+Member 3's service, set `AEGIS_ASSISTANT_URL=http://127.0.0.1:8001` and optionally
+`AEGIS_ASSISTANT_TIMEOUT_SECONDS=3` before launching the backend. See
+[PHASE5_ASSISTANT.md](PHASE5_ASSISTANT.md) and the root README for Windows
+commands. Leave the URL unset to keep only the explicit backend mock mode.
 
 ### Implemented endpoint inventory
 
@@ -284,7 +289,7 @@ No dependency, database schema, route path or success-response shape changed.
 | GET | `/astronauts/{astronaut_id}` | 200, profile |
 | PATCH | `/astronauts/{astronaut_id}` | 200, updated profile |
 | DELETE | `/astronauts/{astronaut_id}` | 204, no body; 409 when referenced |
-| POST | `/health/ingest` | 201, stored-reading array |
+| POST | `/health/ingest` | 201 created, 200 exact idempotent retry, 409 changed/ambiguous identity |
 | GET | `/health/{astronaut_id}/latest` | 200, newest reading per measurement type |
 | GET | `/health/{astronaut_id}/history` | 200, chronological array; type/time filters, limit/offset |
 | POST | `/health/{astronaut_id}/analyses` | 201, saved mock/local analysis |

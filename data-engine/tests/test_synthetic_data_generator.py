@@ -30,6 +30,7 @@ EXPECTED_FIELDS = {
     "heart_rate_bpm",
     "spo2_percent",
     "body_temperature_c",
+    "skin_temperature_c",
     "respiration_rate_bpm",
     "scenario",
 }
@@ -64,6 +65,31 @@ class SyntheticDataGeneratorTests(unittest.TestCase):
                 first = generate_readings(12, scenario=scenario, seed=2026)
                 second = generate_readings(12, scenario=scenario, seed=2026)
                 self.assertEqual(first, second)
+
+    def test_skin_temperature_is_separate_bounded_and_scenario_independent(self) -> None:
+        series = {
+            scenario: generate_readings(20, scenario=scenario, seed=91)
+            for scenario in SCENARIOS
+        }
+        expected_skin = [row["skin_temperature_c"] for row in series["normal"]]
+        self.assertEqual(
+            [row["skin_temperature_c"] for row in series["warning"]], expected_skin
+        )
+        self.assertEqual(
+            [row["skin_temperature_c"] for row in series["critical"]], expected_skin
+        )
+        for value in expected_skin:
+            self.assertGreaterEqual(value, 30.3)
+            self.assertLessEqual(value, 33.3)
+        self.assertNotEqual(
+            [row["body_temperature_c"] for row in series["normal"]], expected_skin
+        )
+
+    def test_generator_accepts_explicit_synthetic_astronaut_id(self) -> None:
+        readings = generate_readings(2, astronaut_id="AST-DEMO-02")
+        self.assertEqual({row["astronaut_id"] for row in readings}, {"AST-DEMO-02"})
+        with self.assertRaisesRegex(ValueError, "astronaut_id"):
+            generate_readings(1, astronaut_id=" ")
 
     def test_values_stay_within_the_selected_demo_scenario_bounds(self) -> None:
         for scenario, profiles in SCENARIOS.items():

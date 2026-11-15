@@ -38,6 +38,25 @@ For scientific communication, distinguish:
    rules, verification, validation, privacy, and governance. This is not
    established by a generic avatar plus synthetic vitals.
 
+The generator keeps the legacy `body_temperature_c` field's semantics
+unspecified and separate. A second `skin_temperature_c` series exists only as
+a reproducible synthetic fixture for exercising the current ML feature
+contract. Its values are not derived from the legacy field, are fixed across
+vital-sign scenario labels, and do not establish a calibrated sensor, a human
+subject's skin temperature, or an astronaut reference range.
+
+## Alert and model-output boundary
+
+- Generic heart-rate, SpO2, and respiration alerts are global summaries. They
+  do not highlight or assess the heart or either lung.
+- Anatomical highlighting is allowed only for explicit
+  `demo-region-simulation` markers. These are synthetic visualization fixtures,
+  independent from generic vital-sign values and are not findings.
+- Local ML status and normalized scores are algorithmic outputs for synthetic
+  feature histories. They are not medical probabilities, diagnoses, or
+  estimates of health risk. Insufficient history remains insufficient; missing
+  measurements are not imputed.
+
 ## Recommended scientific workflow
 
 1. **Define intended use.** For the present demo, constrain use to education
@@ -83,6 +102,9 @@ For scientific communication, distinguish:
 
 - The repository's dashboard data are synthetic demonstration values; no
   authenticated sensor or NASA telemetry source is connected.
+- The ML integration's skin-temperature fixture has no validated measurement
+  site, sensor model, calibration, environmental adjustment, or astronaut
+  applicability; it exists to exercise the software contract only.
 - The repository data contracts are starter examples and currently have
   distinct nested JSON and flat CSV/JSON shapes.
 - No neurological, ocular, vestibular, muscle, bone, abdominal/metabolic,

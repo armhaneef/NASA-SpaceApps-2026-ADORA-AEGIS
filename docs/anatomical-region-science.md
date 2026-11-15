@@ -17,6 +17,10 @@ the current model contains separately measurable organs.
 - Do not map systemic readings to local anatomy unless the measurement
   actually supports that interpretation. The current demo readings do not
   provide organ-specific assessment.
+- Heart-rate, SpO2, and respiration anomalies are global alerts. They must not
+  highlight the heart or either lung. Only explicitly supplied
+  `demo-region-simulation` markers may set a local region highlight, and their
+  label must say they are synthetic visualization fixtures.
 - Preserve the model's real anatomy and mesh names. Do not manufacture
   internal organ meshes, substitute primitives, or imply a hidden organ is
   present. Document unimplemented mappings until a suitable licensed asset is
@@ -31,8 +35,8 @@ the current model contains separately measurable organs.
 | Selectable region | Educational explanation | What the current synthetic dashboard can say |
 |---|---|---|
 | Head / Brain | The brain integrates vestibular, visual, and body-position cues. Microgravity changes the sensory environment; some long-duration astronauts show ocular findings discussed as SANS. Its mechanisms and individual outcomes remain under study. The eye is not the brain, and SANS is not a generic brain-disease label. | Nothing about brain function, vision, balance, intracranial pressure, or SANS. The displayed synthetic demo metrics do not assess these outcomes. |
-| Heart | The heart circulates blood through the body. Gravity, posture, activity, mission phase, and individual adaptation affect how cardiovascular measurements should be interpreted. | A fabricated HR value only. A single synthetic HR is not a cardiac examination, output, diagnosis, or individual baseline. |
-| Lungs | The lungs exchange oxygen and carbon dioxide. Gravity affects pulmonary ventilation/perfusion distribution and related research measurements. | Fabricated SpO2 and respiration-rate fields only. They are not a lung function test, blood gas, respiratory waveform, or evidence of normal pulmonary health. |
+| Heart | The heart circulates blood through the body. Gravity, posture, activity, mission phase, and individual adaptation affect how cardiovascular measurements should be interpreted. | A fabricated HR value only. It is displayed as a global vital and does not highlight or assess the anatomical heart. |
+| Lungs | The lungs exchange oxygen and carbon dioxide. Gravity affects pulmonary ventilation/perfusion distribution and related research measurements. | Fabricated SpO2 and respiration-rate fields only. They are displayed as global vitals and do not highlight or assess either lung. |
 | Abdomen | This is a body region containing multiple organs, not one organ or one physiological system. Nutrition, fluid distribution, body composition, and organ function require different measurements. | No abdominal-organ, metabolic, renal, hepatic, pancreatic, or gastrointestinal assessment. A synthetic temperature is systemic demo data, not an abdomen reading. |
 | Left arm | The arm contains bone, muscle, joints, nerves, and vessels; limb loading and function are studied in spaceflight physiology. | No local strength, bone density, circulation, nerve, or joint measurement. Blood pressure is not in the shared backend/data-engine contract; any local mock value would be systemic UI context, not an arm measurement. |
 | Right arm | Same broad systems as the left arm; side-specific differences require side-specific observations and method context. | No right-arm-specific measurement. Do not duplicate systemic readings as if separately collected. |
@@ -54,8 +58,8 @@ For unavailable region-specific data, prefer:
 Avoid "Normal," "Stable," "Healthy," "within expected range," and
 "Neurological status: Normal" unless those are explicitly defined as
 non-clinical UI states and cannot be mistaken for an assessment. The current
-head panel's "Neurological status: Normal" is not supported by the available
-synthetic fields and should be corrected by the frontend owner.
+frontend labels neurological information as not assessed. Keep that wording and
+do not convert missing data or a lack of alerts into a normal health statement.
 
 ## 3D mapping checklist for Member 5
 
